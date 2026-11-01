@@ -24,7 +24,7 @@ public class AjustesActivity extends Pantalla {
     private final TextView[] chipsComb = new TextView[Gasolineras.NOMBRES.length];
     private final TextView[] metrosDist = new TextView[4];
     private final TextView[][] chipsDist = new TextView[4][3];
-    private TextView radaresEstado;
+    private TextView radaresEstado, estadoBateria;
     private boolean descargando = false;
 
     @Override
@@ -184,6 +184,16 @@ public class AjustesActivity extends Pantalla {
         datos.addView(filaRad);
         col.addView(datos);
 
+        // ---------- Funcionamiento en segundo plano (batería) ----------
+        col.addView(seccion("Funcionamiento en segundo plano"));
+        LinearLayout bat = tarjeta();
+        estadoBateria = texto("", 14, TEXTO, true);
+        LinearLayout filaBat = fila("Permitir que funcione siempre",
+                "Si no, Android puede cerrar Al Loro en viajes largos para ahorrar batería.", estadoBateria);
+        pulsable(filaBat, v -> pedirSinOptimizar());
+        bat.addView(filaBat);
+        col.addView(bat);
+
         TextView creditos = texto("Radares, tramos, semáforos y peajes: © OpenStreetMap. "
                 + "Tráfico: DGT, SCT y Gobierno Vasco. Precios: Ministerio para la Transición Ecológica.",
                 11, SUB, false);
@@ -195,6 +205,34 @@ public class AjustesActivity extends Pantalla {
         scroll.addView(col);
         setContentView(scroll);
         pintarRadares();
+    }
+
+    @Override
+    protected void onResume() {
+        super.onResume();
+        pintarBateria();
+    }
+
+    /** «Permitido» en turquesa si ya está, o «Permitir ›» en naranja si falta. */
+    private void pintarBateria() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        boolean ok = pm.isIgnoringBatteryOptimizations(getPackageName());
+        estadoBateria.setText(ok ? "Permitido ✓" : "Permitir ›");
+        estadoBateria.setTextColor(ok ? VERDE : AMBAR);
+    }
+
+    private void pedirSinOptimizar() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        if (pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            toast("Ya está permitido");
+            return;
+        }
+        try {
+            startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
+                    Uri.parse("package:" + getPackageName())));
+        } catch (Exception e) {
+            startActivity(new Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS));
+        }
     }
 
     private void espacio(LinearLayout l, int dpAlto) {

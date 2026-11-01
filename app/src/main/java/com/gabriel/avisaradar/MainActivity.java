@@ -114,7 +114,7 @@ public class MainActivity extends Pantalla {
         expl.setLineSpacing(dp(2), 1f);
         tarjetaBateria.addView(expl);
         pulsable(tarjetaBateria, v -> pedirSinOptimizar());
-        col.addView(tarjetaBateria, margenArriba(16));
+        tarjetaBateria.setVisibility(View.GONE); // este aviso vive ahora al final de Ajustes
 
         // ---------- Tarjeta principal: estado grande + velocímetro ----------
         LinearLayout hero = tarjeta();
@@ -286,7 +286,7 @@ public class MainActivity extends Pantalla {
         textoPower.setText(activo ? "Apagar" : "Encender");
         botonActivar.setContentDescription(activo ? "Apagar los avisos" : "Encender los avisos");
         // Píldora de estado
-        estadoCabecera.setText(activo ? "●  Activo" : "Parado");
+        estadoCabecera.setText(activo ? "●  Activo" : "Inactivo");
         estadoCabecera.setTextColor(activo ? VERDE : SUB);
         estadoCabecera.setBackground(redondo(TARJETA, BORDE, 19));
         // Titular grande según la pestaña
@@ -300,11 +300,7 @@ public class MainActivity extends Pantalla {
         senalLimite.setTextSize(lim >= 100 ? 12 : 15);
         botonMapa.setVisibility(Ajustes.usarMapa(this) ? View.VISIBLE : View.GONE);
 
-        // Tarjeta de batería
-        PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-        tarjetaBateria.setVisibility(pm.isIgnoringBatteryOptimizations(getPackageName())
-                ? View.GONE : View.VISIBLE);
-    }
+}
 
     /** Lee los radares guardados y pone la tarjeta normal o naranja. */
     private void refrescarRadares() {
