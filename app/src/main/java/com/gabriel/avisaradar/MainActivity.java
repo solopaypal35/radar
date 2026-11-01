@@ -158,6 +158,7 @@ public class MainActivity extends Activity {
         pulsable(llegar, v -> comoLlegar());
         TextView whatsapp = botonPequeno("WhatsApp");
         whatsapp.setTextColor(VERDE);
+        iconoApp(whatsapp, "com.whatsapp");
         pulsable(whatsapp, v -> enviarWhatsApp());
         filaAparc.addView(guardar, pesoBoton());
         filaAparc.addView(llegar, pesoBoton());
@@ -181,6 +182,7 @@ public class MainActivity extends Activity {
         pulsable(sig, v -> Musica.siguiente(this));
         TextView spotify = botonPequeno("Spotify");
         spotify.setTextColor(VERDE);
+        iconoApp(spotify, Musica.SPOTIFY);
         pulsable(spotify, v -> Musica.abrirSpotify(this));
         filaMusica.addView(ant, pesoBoton());
         filaMusica.addView(pp, pesoBoton());
@@ -623,6 +625,19 @@ public class MainActivity extends Activity {
         }
         i.setPackage(null);
         startActivity(Intent.createChooser(i, "Enviar ubicación"));
+    }
+
+    /** Pone delante del texto el icono de la app instalada en el móvil (si lo está). */
+    private void iconoApp(TextView boton, String paquete) {
+        try {
+            android.graphics.drawable.Drawable icono = getPackageManager().getApplicationIcon(paquete);
+            icono.setBounds(0, 0, dp(22), dp(22));
+            boton.setCompoundDrawables(icono, null, null, null);
+            boton.setCompoundDrawablePadding(dp(6));
+            boton.setPadding(dp(8), 0, dp(8), 0);
+        } catch (PackageManager.NameNotFoundException ignored) {
+            // App no instalada: el botón se queda solo con el texto
+        }
     }
 
     private LinearLayout.LayoutParams pesoBoton() {

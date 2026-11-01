@@ -1,41 +1,52 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Cajetín de radar con carita feliz (diseño propio) -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Barrido del radar -->
-    <path
-        android:fillColor="#552EE6A6"
-        android:pathData="M54,54 L54,24 A30,30 0 0,1 79.98,39 Z" />
-    <!-- Anillos -->
+    <!-- Ondas verdes del radar -->
     <path
         android:fillColor="#00000000"
         android:strokeColor="#2EE6A6"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M79,30 A8,8 0 0,1 85,38" />
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#2EE6A6"
+        android:strokeWidth="2.5"
+        android:strokeLineCap="round"
+        android:pathData="M80,23 A15,15 0 0,1 92,36" />
+    <!-- Poste -->
+    <path android:fillColor="#8A96A8" android:pathData="M49,80 L59,80 L59,90 L49,90 Z" />
+    <!-- Cuerpo del cajetín -->
+    <path
+        android:fillColor="#ECEFF3"
+        android:pathData="M36,30 L72,30 L72,80 L36,80 Z" />
+    <!-- Lateral con sombra -->
+    <path android:fillColor="#C7CFDA" android:pathData="M66,30 L72,30 L72,80 L66,80 Z" />
+    <!-- Tapa superior -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:strokeColor="#C7CFDA"
+        android:strokeWidth="1"
+        android:pathData="M33,24 L75,24 L75,31 L33,31 Z" />
+    <!-- Ojos (las ventanillas de la cámara) -->
+    <path android:fillColor="#1E2A3A" android:pathData="M41,40 L50,40 L50,50 L41,50 Z" />
+    <path android:fillColor="#1E2A3A" android:pathData="M56,40 L65,40 L65,50 L56,50 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M45,42 L48,42 L48,45 L45,45 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M60,42 L63,42 L63,45 L60,45 Z" />
+    <!-- Mofletes -->
+    <path android:fillColor="#66FF4D5E" android:pathData="M37,57 A3,3 0 1,1 43,57 A3,3 0 1,1 37,57 Z" />
+    <path android:fillColor="#66FF4D5E" android:pathData="M60,57 A3,3 0 1,1 66,57 A3,3 0 1,1 60,57 Z" />
+    <!-- Sonrisa -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#1E2A3A"
         android:strokeWidth="3"
-        android:pathData="M54,24 A30,30 0 1,1 54,84 A30,30 0 1,1 54,24 Z" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#2EE6A6"
-        android:strokeWidth="2.5"
-        android:pathData="M54,34 A20,20 0 1,1 54,74 A20,20 0 1,1 54,34 Z" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#2EE6A6"
-        android:strokeWidth="2"
-        android:pathData="M54,44 A10,10 0 1,1 54,64 A10,10 0 1,1 54,44 Z" />
-    <!-- Línea del barrido -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#2EE6A6"
-        android:strokeWidth="2.5"
-        android:pathData="M54,54 L79.98,39" />
-    <!-- Centro -->
-    <path
-        android:fillColor="#2EE6A6"
-        android:pathData="M54,51 A3,3 0 1,1 54,57 A3,3 0 1,1 54,51 Z" />
-    <!-- Radar detectado -->
-    <path
-        android:fillColor="#FF4D5E"
-        android:pathData="M65,30 A5,5 0 1,1 65,40 A5,5 0 1,1 65,30 Z" />
+        android:strokeLineCap="round"
+        android:pathData="M44,58 Q53,69 62,58" />
+    <!-- Luz verde de funcionamiento -->
+    <path android:fillColor="#2EE6A6" android:pathData="M51,73 L56,73 L56,76 L51,76 Z" />
 </vector>
