@@ -148,7 +148,7 @@ public class MainActivity extends Pantalla {
         pulsable(botonMapa, v -> startActivity(new Intent(this, MapaActivity.class)));
         LinearLayout.LayoutParams lpMapa = new LinearLayout.LayoutParams(dp(150), dp(46));
         lpMapa.topMargin = dp(8);
-        hero.addView(botonMapa, lpMapa);
+        // (El mapa se abre desde la barra inferior)
         col.addView(hero, margenArriba(16));
 
         // ---------- Aparcamiento ----------
@@ -172,12 +172,13 @@ public class MainActivity extends Pantalla {
         fotoAparc.setClipToOutline(true);
         fotoAparc.setVisibility(View.GONE);
         fotoAparc.setOnClickListener(v -> verFoto());
+        fotoAparc.setContentDescription("Foto del aparcamiento (toca para verla)");
         LinearLayout.LayoutParams lpFoto = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(140));
         lpFoto.topMargin = dp(14);
         aparc.addView(fotoAparc, lpFoto);
         LinearLayout accionesAparc = new LinearLayout(this);
-        accionesAparc.setGravity(Gravity.CENTER_VERTICAL);
+        accionesAparc.setGravity(Gravity.TOP);
         accionesAparc.setPadding(0, dp(16), 0, 0);
         accionesAparc.addView(accion(R.drawable.ic_pin, "Guardar ubicación", v -> guardarAparcamientoManual()), pesoAccion());
         accionesAparc.addView(accion(R.drawable.ic_camara, "Foto", v -> hacerFoto()), pesoAccion());
@@ -208,7 +209,7 @@ public class MainActivity extends Pantalla {
 
         // Espacio para que la barra inferior no tape el final
         View pie = new View(this);
-        col.addView(pie, new LinearLayout.LayoutParams(1, dp(110)));
+        col.addView(pie, new LinearLayout.LayoutParams(1, dp(130)));
 
         ScrollView scroll = new ScrollView(this);
         scroll.setBackgroundColor(FONDO);
@@ -299,7 +300,7 @@ public class MainActivity extends Pantalla {
         senalLimite.setVisibility(activo && lim > 0 ? View.VISIBLE : View.INVISIBLE);
         senalLimite.setText(String.valueOf(lim));
         senalLimite.setTextSize(lim >= 100 ? 12 : 15);
-        botonMapa.setVisibility(Ajustes.usarMapa(this) ? View.VISIBLE : View.GONE);
+
 
 }
 
@@ -864,8 +865,21 @@ public class MainActivity extends Pantalla {
             fotoAparc.setVisibility(View.GONE);
             return;
         }
-        fotoAparc.setImageBitmap(rotarSegunExif(u, b));
+        fotoAparc.setImageBitmap(difuminar(rotarSegunExif(u, b)));
         fotoAparc.setVisibility(View.VISIBLE);
+    }
+
+    /** La miniatura se ve difuminada; al tocarla se abre la foto nítida. */
+    private android.graphics.Bitmap difuminar(android.graphics.Bitmap b) {
+        if (Build.VERSION.SDK_INT >= 31) {
+            fotoAparc.setRenderEffect(android.graphics.RenderEffect.createBlurEffect(
+                    dp(18), dp(18), android.graphics.Shader.TileMode.CLAMP));
+            return b;
+        }
+        // En Android antiguos: se reduce mucho y se vuelve a ampliar, que también difumina
+        int w = Math.max(1, b.getWidth() / 24), h = Math.max(1, b.getHeight() / 24);
+        android.graphics.Bitmap peq = android.graphics.Bitmap.createScaledBitmap(b, w, h, true);
+        return android.graphics.Bitmap.createScaledBitmap(peq, b.getWidth(), b.getHeight(), true);
     }
 
     private android.graphics.Bitmap rotarSegunExif(Uri u, android.graphics.Bitmap b) {
