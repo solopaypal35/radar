@@ -45,6 +45,7 @@ public class MainActivity extends Pantalla {
     private TextView estadoCabecera, aparcTexto, titularHero, etiquetaHero, senalLimite, botonMapa;
     private VelocimetroView velocimetro;
     private BarraTramo barraTramo;
+    private android.widget.EditText campoDestino;
     private double aparcLatMostrada = Double.NaN;
     private ImageView fotoAparc;
     private String fotoMostrada = null;
@@ -156,6 +157,31 @@ public class MainActivity extends Pantalla {
         lpMapa.topMargin = dp(8);
         // (El mapa se abre desde la barra inferior)
         col.addView(hero, margenArriba(16));
+
+        // ---------- ¿A dónde vas? (abre Google Maps o Waze) ----------
+        col.addView(tituloSeccion("¿A dónde vas?", null, null));
+        LinearLayout destino = tarjeta();
+        LinearLayout filaDestino = new LinearLayout(this);
+        filaDestino.setGravity(Gravity.CENTER_VERTICAL);
+        campoDestino = new android.widget.EditText(this);
+        campoDestino.setHint("Dirección o lugar");
+        campoDestino.setHintTextColor(SUB);
+        campoDestino.setTextColor(TEXTO);
+        campoDestino.setTextSize(15);
+        campoDestino.setSingleLine(true);
+        campoDestino.setIncludeFontPadding(false);
+        campoDestino.setImeOptions(android.view.inputmethod.EditorInfo.IME_ACTION_GO);
+        campoDestino.setBackground(redondo(HUNDIDO, BORDE, 24));
+        campoDestino.setPadding(dp(18), 0, dp(18), 0);
+        campoDestino.setOnEditorActionListener((v, accionIme, e) -> {
+            irCon("com.google.android.apps.maps");
+            return true;
+        });
+        filaDestino.addView(campoDestino, new LinearLayout.LayoutParams(0, dp(52), 1f));
+        filaDestino.addView(botonNavegador("com.google.android.apps.maps", "Maps"));
+        filaDestino.addView(botonNavegador("com.waze", "Waze"));
+        destino.addView(filaDestino);
+        col.addView(destino);
 
         // ---------- Aparcamiento ----------
         col.addView(tituloSeccion("Aparcamiento", null, null));
@@ -414,6 +440,44 @@ public class MainActivity extends Pantalla {
             c.drawText("Quedan " + km(RadarService.restanteTramo), w, alto + 22 * d, p);
 
             if (getVisibility() == VISIBLE) postInvalidateOnAnimation();
+        }
+    }
+
+    /** Botón redondo con el icono de la app de navegación instalada en el móvil. */
+    private android.widget.FrameLayout botonNavegador(String paquete, String nombre) {
+        android.widget.FrameLayout f = botonIcono(R.drawable.ic_ruta, TEXTO, 22, relieveOval());
+        try {
+            android.graphics.drawable.Drawable ic = getPackageManager().getApplicationIcon(paquete);
+            ImageView i = (ImageView) f.getChildAt(0);
+            i.setImageDrawable(ic);
+            i.clearColorFilter();
+            i.setLayoutParams(new android.widget.FrameLayout.LayoutParams(dp(32), dp(32), Gravity.CENTER));
+        } catch (PackageManager.NameNotFoundException ignored) {
+        }
+        f.setContentDescription("Ir con " + nombre);
+        pulsable(f, v -> irCon(paquete));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(dp(52), dp(52));
+        lp.leftMargin = dp(10);
+        f.setLayoutParams(lp);
+        return f;
+    }
+
+    /** Abre la navegación hacia el destino escrito, en Google Maps o en Waze. */
+    private void irCon(String paquete) {
+        String d = campoDestino.getText().toString().trim();
+        if (d.isEmpty()) {
+            toast("Escribe a dónde vas");
+            return;
+        }
+        String q = Uri.encode(d);
+        Intent i = paquete.equals("com.waze")
+                ? new Intent(Intent.ACTION_VIEW, Uri.parse("https://waze.com/ul?q=" + q + "&navigate=yes"))
+                : new Intent(Intent.ACTION_VIEW, Uri.parse("google.navigation:q=" + q));
+        i.setPackage(paquete);
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            toast((paquete.equals("com.waze") ? "Waze" : "Google Maps") + " no está instalado");
         }
     }
 
