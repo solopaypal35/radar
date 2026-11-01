@@ -77,7 +77,7 @@ public class MainActivity extends Pantalla {
         logo.setImageResource(R.drawable.ic_logo);
         logo.setBackground(redondo(TARJETA, BORDE, 14));
         cabecera.addView(logo, new LinearLayout.LayoutParams(dp(42), dp(42)));
-        TextView nombre = texto("AvisaRadar", 18, TEXTO, true);
+        TextView nombre = texto("Al Loro", 18, TEXTO, true);
         nombre.setPadding(dp(12), 0, 0, 0);
         cabecera.addView(nombre, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         estadoCabecera = texto("", 13, TEXTO, true);
@@ -108,7 +108,7 @@ public class MainActivity extends Pantalla {
         tarjetaBateria = tarjeta();
         tarjetaBateria.setBackground(redondo(AMBAR_FONDO, AMBAR, 26));
         tarjetaBateria.addView(texto("Permite que funcione siempre", 16, AMBAR, true));
-        TextView expl = texto("Si no, Android puede cerrar AvisaRadar en viajes largos. Toca aquí y pulsa «Permitir».",
+        TextView expl = texto("Si no, Android puede cerrar Al Loro en viajes largos. Toca aquí y pulsa «Permitir».",
                 13, TEXTO, false);
         expl.setPadding(0, dp(6), 0, 0);
         expl.setLineSpacing(dp(2), 1f);
@@ -785,7 +785,7 @@ public class MainActivity extends Pantalla {
                         .format(new java.util.Date()) + ".jpg");
         v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
         if (Build.VERSION.SDK_INT >= 29) {
-            v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AvisaRadar");
+            v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AlLoro");
         }
         try {
             fotoPendiente = getContentResolver().insert(

@@ -68,7 +68,7 @@ public class Gasolineras {
             con.setConnectTimeout(15000);
             con.setReadTimeout(60000);
             con.setRequestProperty("Accept", "application/json");
-            con.setRequestProperty("User-Agent", "AvisaRadar (app personal)");
+            con.setRequestProperty("User-Agent", "AlLoro (app personal)");
             try (InputStream in = con.getInputStream()) {
                 if (con.getResponseCode() != 200) return null;
                 String s = RadarDB.leer(in);

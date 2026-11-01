@@ -154,7 +154,7 @@ public class AjustesActivity extends Pantalla {
         burbuja.setOnCheckedChangeListener((b, si) -> {
             Ajustes.setBurbuja(this, si);
             if (si && !Burbuja.tienePermiso(this)) {
-                toast("Activa «Mostrar sobre otras apps» para AvisaRadar y vuelve");
+                toast("Activa «Mostrar sobre otras apps» para Al Loro y vuelve");
                 startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
                         Uri.parse("package:" + getPackageName())));
             }

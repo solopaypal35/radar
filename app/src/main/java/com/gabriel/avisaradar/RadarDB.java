@@ -190,7 +190,7 @@ public class RadarDB {
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
-        con.setRequestProperty("User-Agent", "AvisaRadar/1.0 (app personal)");
+        con.setRequestProperty("User-Agent", "AlLoro/1.0 (app personal)");
         byte[] cuerpo = ("data=" + URLEncoder.encode(consulta, "UTF-8")).getBytes(StandardCharsets.UTF_8);
         try (OutputStream out = con.getOutputStream()) {
             out.write(cuerpo);

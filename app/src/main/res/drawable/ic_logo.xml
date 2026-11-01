@@ -1,52 +1,56 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Cajetín de radar con carita feliz (diseño propio) -->
+<!-- Logo de «Al Loro»: un loro (diseño propio) vigilando encima del cajetín de radar sonriente -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- Ondas verdes del radar -->
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#2EE6A6"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M79,30 A8,8 0 0,1 85,38" />
-    <path
-        android:fillColor="#00000000"
-        android:strokeColor="#2EE6A6"
-        android:strokeWidth="2.5"
-        android:strokeLineCap="round"
-        android:pathData="M80,23 A15,15 0 0,1 92,36" />
     <!-- Poste -->
-    <path android:fillColor="#8A96A8" android:pathData="M49,80 L59,80 L59,90 L49,90 Z" />
+    <path android:fillColor="#8A96A8" android:pathData="M50,84 L58,84 L58,91 L50,91 Z" />
     <!-- Cuerpo del cajetín -->
-    <path
-        android:fillColor="#ECEFF3"
-        android:pathData="M36,30 L72,30 L72,80 L36,80 Z" />
-    <!-- Lateral con sombra -->
-    <path android:fillColor="#C7CFDA" android:pathData="M66,30 L72,30 L72,80 L66,80 Z" />
-    <!-- Tapa superior -->
+    <path android:fillColor="#ECEFF3" android:pathData="M39,50 L69,50 L69,84 L39,84 Z" />
+    <path android:fillColor="#C7CFDA" android:pathData="M64,50 L69,50 L69,84 L64,84 Z" />
+    <!-- Tapa -->
     <path
         android:fillColor="#FFFFFF"
         android:strokeColor="#C7CFDA"
         android:strokeWidth="1"
-        android:pathData="M33,24 L75,24 L75,31 L33,31 Z" />
-    <!-- Ojos (las ventanillas de la cámara) -->
-    <path android:fillColor="#1E2A3A" android:pathData="M41,40 L50,40 L50,50 L41,50 Z" />
-    <path android:fillColor="#1E2A3A" android:pathData="M56,40 L65,40 L65,50 L56,50 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M45,42 L48,42 L48,45 L45,45 Z" />
-    <path android:fillColor="#FFFFFF" android:pathData="M60,42 L63,42 L63,45 L60,45 Z" />
-    <!-- Mofletes -->
-    <path android:fillColor="#66FF4D5E" android:pathData="M37,57 A3,3 0 1,1 43,57 A3,3 0 1,1 37,57 Z" />
-    <path android:fillColor="#66FF4D5E" android:pathData="M60,57 A3,3 0 1,1 66,57 A3,3 0 1,1 60,57 Z" />
-    <!-- Sonrisa -->
+        android:pathData="M36,45 L72,45 L72,51 L36,51 Z" />
+    <!-- Carita del cajetín -->
+    <path android:fillColor="#1E2A3A" android:pathData="M43,57 L50,57 L50,64 L43,64 Z" />
+    <path android:fillColor="#1E2A3A" android:pathData="M56,57 L63,57 L63,64 L56,64 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M46,58.5 L48.5,58.5 L48.5,61 L46,61 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M59,58.5 L61.5,58.5 L61.5,61 L59,61 Z" />
     <path
         android:fillColor="#00000000"
         android:strokeColor="#1E2A3A"
-        android:strokeWidth="3"
+        android:strokeWidth="2.6"
         android:strokeLineCap="round"
-        android:pathData="M44,58 Q53,69 62,58" />
-    <!-- Luz verde de funcionamiento -->
-    <path android:fillColor="#2EE6A6" android:pathData="M51,73 L56,73 L56,76 L51,76 Z" />
+        android:pathData="M46,70 Q53,77 60,70" />
+    <path android:fillColor="#3FC1CF" android:pathData="M51,79 L56,79 L56,81.5 L51,81.5 Z" />
+
+    <!-- Loro: cola -->
+    <path android:fillColor="#2D7FF9" android:pathData="M62,38 L76,49 L71,52 L58,43 Z" />
+    <!-- Patas sobre la tapa -->
+    <path
+        android:fillColor="#00000000"
+        android:strokeColor="#F5A623"
+        android:strokeWidth="2"
+        android:strokeLineCap="round"
+        android:pathData="M53,42 L53,45.5 M58,42 L58,45.5" />
+    <!-- Cuerpo -->
+    <path android:fillColor="#2ECC71" android:pathData="M47,35 A9,10 0 1,1 65,35 A9,10 0 1,1 47,35 Z" />
+    <!-- Ala -->
+    <path android:fillColor="#1E9E57" android:pathData="M55,31 Q66,31 64,43 Q57,41 55,31 Z" />
+    <path android:fillColor="#2D7FF9" android:pathData="M58,38 Q63,39 63.5,43 Q60,42 58,38 Z" />
+    <!-- Cabeza -->
+    <path android:fillColor="#E8433A" android:pathData="M44,24 A7,7 0 1,1 58,24 A7,7 0 1,1 44,24 Z" />
+    <!-- Mejilla -->
+    <path android:fillColor="#FFD166" android:pathData="M47,27 A2.5,2 0 1,1 52,27 A2.5,2 0 1,1 47,27 Z" />
+    <!-- Pico curvado -->
+    <path android:fillColor="#F5E6C8" android:pathData="M45,22 Q38,23 40,30 Q42,27 46,27 Z" />
+    <path android:fillColor="#3A3A3A" android:pathData="M40,29 Q41,27.5 43,27.3 L43,28 Q41.5,28.4 40.5,30 Z" />
+    <!-- Ojo -->
+    <path android:fillColor="#FFFFFF" android:pathData="M48,22 A2.3,2.3 0 1,1 52.6,22 A2.3,2.3 0 1,1 48,22 Z" />
+    <path android:fillColor="#111111" android:pathData="M49.4,22 A1,1 0 1,1 51.4,22 A1,1 0 1,1 49.4,22 Z" />
 </vector>

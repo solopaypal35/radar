@@ -56,7 +56,7 @@ public class IncidenciasDB {
         HttpURLConnection con = (HttpURLConnection) new URL(direccion).openConnection();
         con.setConnectTimeout(15000);
         con.setReadTimeout(60000);
-        con.setRequestProperty("User-Agent", "AvisaRadar/1.2 (app personal)");
+        con.setRequestProperty("User-Agent", "AlLoro/1.2 (app personal)");
         try (InputStream in = new BufferedInputStream(con.getInputStream())) {
             if (con.getResponseCode() != 200) throw new Exception("HTTP " + con.getResponseCode());
             return leer(in);

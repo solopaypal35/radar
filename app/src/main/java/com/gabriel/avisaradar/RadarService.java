@@ -168,7 +168,7 @@ public class RadarService extends Service implements LocationListener {
                 return START_NOT_STICKY;
             }
             PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AvisaRadar:gps");
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AlLoro:gps");
             wakeLock.acquire(12 * 60 * 60 * 1000L); // máximo 12 horas
             activo = true;
             if (Ajustes.avisosTrafico(this)) iniciarTrafico();
@@ -666,7 +666,7 @@ public class RadarService extends Service implements LocationListener {
     private void crearCanales() {
         NotificationManager nm = getSystemService(NotificationManager.class);
         NotificationChannel estado = new NotificationChannel(
-                CANAL_ESTADO, "Estado de AvisaRadar", NotificationManager.IMPORTANCE_LOW);
+                CANAL_ESTADO, "Estado de Al Loro", NotificationManager.IMPORTANCE_LOW);
         estado.setShowBadge(false);
         nm.createNotificationChannel(estado);
 
@@ -691,7 +691,7 @@ public class RadarService extends Service implements LocationListener {
         return new Notification.Builder(this, CANAL_ESTADO)
                 .setSmallIcon(R.drawable.ic_notif)
                 .setColor(0xFF2EE6A6)
-                .setContentTitle("AvisaRadar activo")
+                .setContentTitle("Al Loro activo")
                 .setContentText(texto)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
