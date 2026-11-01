@@ -86,6 +86,11 @@ public class MapaActivity extends Activity {
 
         miPosicion = new MyLocationNewOverlay(new GpsMyLocationProvider(this), mapa);
         miPosicion.setDrawAccuracyEnabled(false);
+        // Tu posición se dibuja como un coche de carreras que gira según tu dirección
+        android.graphics.Bitmap coche = cocheBitmap();
+        miPosicion.setDirectionArrow(coche, coche);
+        miPosicion.setPersonAnchor(0.5f, 0.5f);
+        miPosicion.setDirectionAnchor(0.5f, 0.5f);
         mapa.getOverlays().add(miPosicion);
         mapa.getOverlays().add(new CopyrightOverlay(this));
 
@@ -233,6 +238,16 @@ public class MapaActivity extends Activity {
         }
         mapa.getOverlays().addAll(marcasTrafico);
         mapa.invalidate();
+    }
+
+    private android.graphics.Bitmap cocheBitmap() {
+        android.graphics.drawable.Drawable d = getDrawable(R.drawable.ic_coche);
+        int w = dp(30), h = dp(45);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(b);
+        d.setBounds(0, 0, w, h);
+        d.draw(c);
+        return b;
     }
 
     private GradientDrawable circulo(int color) {

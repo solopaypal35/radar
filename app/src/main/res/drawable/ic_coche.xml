@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Coche de carreras visto desde arriba, mirando hacia arriba (diseño propio) -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="32dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="72">
+    <!-- Ruedas -->
+    <path android:fillColor="#1A1A1A" android:pathData="M4,12 L10,12 L10,24 L4,24 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M38,12 L44,12 L44,24 L38,24 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M3,47 L10,47 L10,60 L3,60 Z" />
+    <path android:fillColor="#1A1A1A" android:pathData="M38,47 L45,47 L45,60 L38,60 Z" />
+    <!-- Carrocería con borde blanco para que se vea sobre el mapa -->
+    <path
+        android:fillColor="#E3242B"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1.5"
+        android:pathData="M18,4 L30,4 A10,10 0 0,1 40,14 L40,58 A10,10 0 0,1 30,68 L18,68 A10,10 0 0,1 8,58 L8,14 A10,10 0 0,1 18,4 Z" />
+    <!-- Techo -->
+    <path android:fillColor="#B71C24" android:pathData="M16,33 L32,33 L33,50 L15,50 Z" />
+    <!-- Lunas -->
+    <path android:fillColor="#1E2A3A" android:pathData="M13,24 L35,24 L32,33 L16,33 Z" />
+    <path android:fillColor="#1E2A3A" android:pathData="M15,50 L33,50 L35,56 L13,56 Z" />
+    <!-- Franjas blancas -->
+    <path android:fillColor="#FFFFFF" android:pathData="M20,4.8 L22,4.8 L22,24 L20,24 Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M26,4.8 L28,4.8 L28,24 L26,24 Z" />
+    <!-- Faros -->
+    <path android:fillColor="#FFE082" android:pathData="M11,8 L17,8 L17,11 L11,11 Z" />
+    <path android:fillColor="#FFE082" android:pathData="M31,8 L37,8 L37,11 L31,11 Z" />
+    <!-- Alerón trasero -->
+    <path
+        android:fillColor="#B71C24"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="1"
+        android:pathData="M5,63 L43,63 L43,69 L5,69 Z" />
+</vector>

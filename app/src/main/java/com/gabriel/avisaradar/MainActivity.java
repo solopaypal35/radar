@@ -163,20 +163,6 @@ public class MainActivity extends Activity {
         opciones.addView(interTrafico);
         col.addView(opciones, margenArriba(12));
 
-        // Mis avisos
-        LinearLayout fila = new LinearLayout(this);
-        TextView anadir = botonPequeno("+  Aviso aquí");
-        pulsable(anadir, v -> anadirAqui());
-        TextView borrar = botonPequeno("Borrar mis avisos");
-        pulsable(borrar, v -> confirmarBorrar());
-        LinearLayout.LayoutParams lpA = new LinearLayout.LayoutParams(0, dp(50), 1f);
-        lpA.rightMargin = dp(6);
-        LinearLayout.LayoutParams lpB = new LinearLayout.LayoutParams(0, dp(50), 1f);
-        lpB.leftMargin = dp(6);
-        fila.addView(anadir, lpA);
-        fila.addView(borrar, lpB);
-        col.addView(fila, margenArriba(12));
-
         TextView ayuda = texto("Activa los avisos y abre Google Maps o Waze: AvisaRadar seguirá "
                 + "avisando en segundo plano, también con la pantalla apagada. Para pararla, usa "
                 + "«Parar» en la notificación.\n\nDatos de radares: © colaboradores de "
