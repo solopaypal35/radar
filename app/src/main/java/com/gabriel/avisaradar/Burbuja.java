@@ -75,6 +75,9 @@ public class Burbuja {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             ctx.startActivity(i);
         }));
+        TextView cerrar = boton("✕", v -> ocultar());
+        cerrar.setTextColor(RadarView.ROJO);
+        panel.addView(cerrar);
         panel.setVisibility(View.GONE);
         LinearLayout.LayoutParams lpPanel = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.WRAP_CONTENT, dp(44));

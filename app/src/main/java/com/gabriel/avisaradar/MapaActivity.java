@@ -42,7 +42,8 @@ public class MapaActivity extends Activity {
 
     private MapView mapa;
     private MyLocationNewOverlay miPosicion;
-    private TextView velocidad, botonRumbo, botonCentrar;
+    private TextView velocidad, botonCentrar;
+    private List<RadarDB.Radar> radaresMapa = new ArrayList<>();
     private final List<Overlay> marcasTrafico = new ArrayList<>();
     private List<IncidenciasDB.Incidencia> traficoPintado = null;
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -69,7 +70,7 @@ public class MapaActivity extends Activity {
         cfg.setOsmdroidTileCache(new File(base, "tiles"));
         cfg.setTileFileSystemCacheMaxBytes(100L * 1024 * 1024); // 100 MB de caché como máximo
 
-        rumboArriba = Ajustes.rumboArriba(this);
+        rumboArriba = false; // el mapa siempre con el norte arriba
 
         FrameLayout raiz = new FrameLayout(this);
         raiz.setBackgroundColor(MainActivity.FONDO);
@@ -106,13 +107,6 @@ public class MapaActivity extends Activity {
         botones.setOrientation(LinearLayout.HORIZONTAL);
         TextView volver = boton("Volver", 15);
         volver.setOnClickListener(v -> finish());
-        botonRumbo = boton("", 15);
-        botonRumbo.setOnClickListener(v -> {
-            rumboArriba = !rumboArriba;
-            Ajustes.setRumboArriba(this, rumboArriba);
-            if (!rumboArriba) mapa.setMapOrientation(0);
-            pintarBotones();
-        });
         botonCentrar = boton("Centrar", 15);
         botonCentrar.setOnClickListener(v -> {
             miPosicion.enableFollowLocation();
@@ -122,7 +116,6 @@ public class MapaActivity extends Activity {
             pintarBotones();
         });
         botones.addView(volver, pesoIgual());
-        botones.addView(botonRumbo, pesoIgual());
         botones.addView(botonCentrar, pesoIgual());
         FrameLayout.LayoutParams lpBot = new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, dp(52), Gravity.BOTTOM);
@@ -196,20 +189,26 @@ public class MapaActivity extends Activity {
         new Thread(() -> {
             List<RadarDB.Radar> radares = RadarDB.cargar(this);
             List<IGeoPoint> puntos = new ArrayList<>();
+            radaresMapa = radares;
             for (RadarDB.Radar r : radares) puntos.add(new GeoPoint(r.lat, r.lon));
             runOnUiThread(() -> {
                 if (isFinishing() || puntos.isEmpty()) return;
                 Paint relleno = new Paint(Paint.ANTI_ALIAS_FLAG);
-                relleno.setColor(MainActivity.ROJO);
+                relleno.setColor(0xFF2F80ED); // radares en azul
                 relleno.setStyle(Paint.Style.FILL);
                 SimpleFastPointOverlayOptions op = SimpleFastPointOverlayOptions.getDefaultStyle()
                         .setAlgorithm(SimpleFastPointOverlayOptions.RenderingAlgorithm.MAXIMUM_OPTIMIZATION)
                         .setSymbol(SimpleFastPointOverlayOptions.Shape.CIRCLE)
                         .setRadius(dp(6))
-                        .setIsClickable(false)
+                        .setIsClickable(true)
                         .setPointStyle(relleno);
                 SimpleFastPointOverlay capa = new SimpleFastPointOverlay(
                         new SimplePointTheme(puntos, false), op);
+                capa.setOnClickListener((lista, indice) -> {
+                    if (indice != null && indice >= 0 && indice < radaresMapa.size()) {
+                        mostrarRadar(radaresMapa.get(indice));
+                    }
+                });
                 mapa.getOverlays().add(0, capa);
                 mapa.invalidate();
             });
@@ -251,6 +250,33 @@ public class MapaActivity extends Activity {
         return b;
     }
 
+    /** Al tocar un radar: su límite y un botón para verlo en Street View. */
+    private void mostrarRadar(RadarDB.Radar r) {
+        String titulo = r.propio ? "Aviso propio" : "Radar fijo";
+        String texto = (r.limite > 0 ? "Límite " + r.limite + " km/h" : "Límite no indicado")
+                + "\n\nStreet View te enseña la carretera desde el punto más cercano al radar.";
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(titulo)
+                .setMessage(texto)
+                .setPositiveButton("Ver en Street View", (d, w) -> abrirStreetView(r.lat, r.lon))
+                .setNegativeButton("Cerrar", null)
+                .show();
+    }
+
+    private void abrirStreetView(double lat, double lon) {
+        android.content.Intent i = new android.content.Intent(android.content.Intent.ACTION_VIEW,
+                android.net.Uri.parse(String.format(java.util.Locale.US, "google.streetview:cbll=%.6f,%.6f", lat, lon)));
+        i.setPackage("com.google.android.apps.maps");
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            // Sin la app de Google Maps: se abre en el navegador
+            startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(
+                    String.format(java.util.Locale.US,
+                            "https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=%.6f,%.6f", lat, lon))));
+        }
+    }
+
     /** Marca «P» verde donde has dejado el coche. */
     private void pintarAparcamiento() {
         if (!Ajustes.hayAparcamiento(this)) return;
@@ -288,7 +314,6 @@ public class MapaActivity extends Activity {
     }
 
     private void pintarBotones() {
-        botonRumbo.setText(rumboArriba ? "Dirección ↑" : "Norte ↑");
         botonCentrar.setTextColor(miPosicion.isFollowLocationEnabled() ? MainActivity.SUB : MainActivity.VERDE);
     }
 

@@ -324,7 +324,10 @@ public class RadarService extends Service implements LocationListener {
             boolean pasado = tramo.limite > 0 && mediaTramo > tramo.limite;
             if (!Ajustes.soloSiMePaso(this) || pasado) {
                 String frase = "Tu media es de " + mediaTramo + " kilómetros por hora";
-                if (pasado) frase += ", por encima del límite de " + tramo.limite;
+                if (pasado) {
+                    frase += ". Vas " + (mediaTramo - tramo.limite)
+                            + " por encima del límite de " + tramo.limite;
+                }
                 emitir(frase);
                 notificar("Radar de tramo", frase, pasado ? 0xFFFF4D5E : 0xFFFFB020, ID_AVISO + 2);
             }
