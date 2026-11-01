@@ -5,7 +5,11 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.bluetooth.BluetoothDevice;
+import android.content.BroadcastReceiver;
+import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.pm.ServiceInfo;
 import android.graphics.drawable.Icon;
 import android.location.Location;
@@ -17,6 +21,8 @@ import android.os.Build;
 import android.os.Bundle;
 import android.os.IBinder;
 import android.os.PowerManager;
+import android.os.VibrationEffect;
+import android.os.Vibrator;
 import android.speech.tts.TextToSpeech;
 
 import java.util.IdentityHashMap;
@@ -42,6 +48,19 @@ public class RadarService extends Service implements LocationListener {
     public static volatile boolean exceso = false; // vas por encima del límite cerca de un radar
     public static volatile boolean hayGps = false;
     public static volatile String incidenciaTexto = null; // "Accidente a 1,2 km" o null
+    // Radar de tramo
+    public static volatile boolean enTramo = false;
+    public static volatile int mediaTramo = 0;      // km/h
+    public static volatile int limiteTramo = 0;
+    // Límite de la carretera por la que vas (OpenStreetMap)
+    public static volatile int limiteVia = 0;
+
+    /** Límite que se enseña en pantalla: el del radar cercano, el del tramo o el de la vía. */
+    public static int limiteMostrado() {
+        if (distancia >= 0 && limite > 0) return limite;
+        if (enTramo && limiteTramo > 0) return limiteTramo;
+        return limiteVia;
+    }
 
     private List<RadarDB.Radar> radares;
     private LocationManager lm;
@@ -60,11 +79,32 @@ public class RadarService extends Service implements LocationListener {
     private final Map<IncidenciasDB.Incidencia, Integer> nivelTrafico = new IdentityHashMap<>();
     private Thread hiloTrafico;
 
+    // Tramos
+    private List<TramosDB.Tramo> tramos;
+    private TramosDB.Tramo tramo, tramoTerminado;
+    private double finLat, finLon, recorrido, minFin;
+    private long inicioTramo, finTramoHora;
+    private Location anteriorTramo;
+    private boolean avisadoMedia;
+
+    private Thread hiloLimite;
+    private Burbuja burbuja;
+    private double maxVelocidad = 0;
+    private final BroadcastReceiver bluetooth = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context c, Intent i) {
+            // Al desconectarse el Bluetooth del coche, se guarda dónde has aparcado
+            guardarAparcamientoAuto();
+        }
+    };
+    private boolean bluetoothRegistrado = false;
+
     @Override
     public void onCreate() {
         super.onCreate();
         crearCanales();
         radares = RadarDB.cargar(this);
+        tramos = TramosDB.cargar(this);
         tts = new TextToSpeech(this, estado -> {
             if (estado == TextToSpeech.SUCCESS) {
                 tts.setLanguage(new Locale("es", "ES"));
@@ -103,12 +143,40 @@ public class RadarService extends Service implements LocationListener {
             wakeLock.acquire(12 * 60 * 60 * 1000L); // máximo 12 horas
             activo = true;
             if (Ajustes.avisosTrafico(this)) iniciarTrafico();
+            iniciarLimiteVia();
+            if (Ajustes.burbuja(this) && Burbuja.tienePermiso(this)) {
+                burbuja = new Burbuja(this);
+                burbuja.mostrar();
+            }
+            try {
+                IntentFilter f = new IntentFilter(BluetoothDevice.ACTION_ACL_DISCONNECTED);
+                if (Build.VERSION.SDK_INT >= 33) {
+                    registerReceiver(bluetooth, f, Context.RECEIVER_EXPORTED);
+                } else {
+                    registerReceiver(bluetooth, f);
+                }
+                bluetoothRegistrado = true;
+            } catch (Exception ignored) {
+            }
         }
         return START_NOT_STICKY;
     }
 
     @Override
     public void onDestroy() {
+        guardarAparcamientoAuto();
+        if (burbuja != null) burbuja.ocultar();
+        if (bluetoothRegistrado) {
+            try {
+                unregisterReceiver(bluetooth);
+            } catch (Exception ignored) {
+            }
+        }
+        if (hiloLimite != null) hiloLimite.interrupt();
+        enTramo = false;
+        mediaTramo = 0;
+        limiteTramo = 0;
+        limiteVia = 0;
         activo = false;
         hayGps = false;
         velocidad = 0;
@@ -174,8 +242,7 @@ public class RadarService extends Service implements LocationListener {
         if (ahoraNivel > antes) {
             nivelTrafico.put(cercana, ahoraNivel);
             String frase = cercana.tipo + " a " + distanciaHablada(dCercana);
-            pitar();
-            hablar(frase);
+            emitir(frase);
             Notification n = new Notification.Builder(this, CANAL_AVISO)
                     .setSmallIcon(R.drawable.ic_notif)
                     .setColor(0xFFFFB020)
@@ -196,6 +263,116 @@ public class RadarService extends Service implements LocationListener {
             return s + (km == 1.0 ? " kilómetro" : " kilómetros");
         }
         return (Math.round(m / 50.0) * 50) + " metros";
+    }
+
+    // ---------- Límite de la vía ----------
+
+    /** Consulta el límite de la carretera cada vez que avanzas unos 300 m (como mucho cada 15 s). */
+    private void iniciarLimiteVia() {
+        hiloLimite = new Thread(() -> {
+            Location consultada = null;
+            long cuando = 0;
+            while (!Thread.currentThread().isInterrupted()) {
+                Location l = ultima;
+                long ahora = System.currentTimeMillis();
+                if (l != null && ahora - l.getTime() < 20000 && ahora - cuando > 15000
+                        && (consultada == null || consultada.distanceTo(l) > 300)) {
+                    int lim = LimiteVia.consultar(l.getLatitude(), l.getLongitude());
+                    if (lim >= 0) limiteVia = lim;
+                    consultada = l;
+                    cuando = ahora;
+                }
+                try {
+                    Thread.sleep(3000);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
+        hiloLimite.setDaemon(true);
+        hiloLimite.start();
+    }
+
+    // ---------- Radares de tramo ----------
+
+    private void revisarTramo(Location loc, double kmh, boolean hayRumbo, float rumbo) {
+        float[] res = new float[2];
+        if (tramo == null) {
+            for (TramosDB.Tramo t : tramos) {
+                if (t == tramoTerminado && System.currentTimeMillis() - finTramoHora < 120000) continue;
+                Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), t.latA, t.lonA, res);
+                if (res[0] < 45 && empezar(t, loc, t.latB, t.lonB, hayRumbo, rumbo)) return;
+                Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), t.latB, t.lonB, res);
+                if (res[0] < 45 && empezar(t, loc, t.latA, t.lonA, hayRumbo, rumbo)) return;
+            }
+            return;
+        }
+
+        // Dentro del tramo: se suma lo recorrido y se calcula la media
+        if (anteriorTramo != null) recorrido += anteriorTramo.distanceTo(loc);
+        anteriorTramo = loc;
+        double segundos = (loc.getTime() - inicioTramo) / 1000.0;
+        if (segundos >= 8) {
+            mediaTramo = (int) Math.round(recorrido / segundos * 3.6);
+        }
+        Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), finLat, finLon, res);
+        double dFin = res[0];
+        minFin = Math.min(minFin, dFin);
+
+        if (!avisadoMedia && dFin <= 200) {
+            avisadoMedia = true;
+            boolean pasado = tramo.limite > 0 && mediaTramo > tramo.limite;
+            if (!Ajustes.soloSiMePaso(this) || pasado) {
+                String frase = "Tu media es de " + mediaTramo + " kilómetros por hora";
+                if (pasado) frase += ", por encima del límite de " + tramo.limite;
+                emitir(frase);
+                notificar("Radar de tramo", frase, pasado ? 0xFFFF4D5E : 0xFFFFB020, ID_AVISO + 2);
+            }
+        }
+        boolean llegado = dFin < 40 || (dFin > minFin + 80 && minFin < 250);
+        boolean perdido = dFin > minFin + 1500 || segundos > 2 * 60 * 60;
+        if (llegado || perdido) {
+            if (llegado && !Ajustes.soloSiMePaso(this)) emitir("Fin del tramo");
+            tramoTerminado = tramo;
+            finTramoHora = System.currentTimeMillis();
+            tramo = null;
+            enTramo = false;
+            limiteTramo = 0;
+        }
+    }
+
+    private boolean empezar(TramosDB.Tramo t, Location loc, double lat, double lon,
+                            boolean hayRumbo, float rumbo) {
+        float[] res = new float[2];
+        Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), lat, lon, res);
+        if (res[0] < 300) return false;                        // demasiado corto
+        if (!hayRumbo || angulo(rumbo, res[1]) > 70) return false; // no vas hacia el final
+        tramo = t;
+        finLat = lat;
+        finLon = lon;
+        recorrido = 0;
+        minFin = res[0];
+        inicioTramo = loc.getTime();
+        anteriorTramo = loc;
+        avisadoMedia = false;
+        mediaTramo = 0;
+        limiteTramo = t.limite;
+        enTramo = true;
+        if (!Ajustes.soloSiMePaso(this)) {
+            emitir("Inicio de radar de tramo" + (t.limite > 0 ? ", límite " + t.limite : ""));
+        }
+        return true;
+    }
+
+    // ---------- Dónde he aparcado ----------
+
+    private void guardarAparcamientoAuto() {
+        Location l = ultima;
+        if (!Ajustes.aparcarAuto(this) || l == null || maxVelocidad < 20) return;
+        if (System.currentTimeMillis() - l.getTime() > 10 * 60 * 1000L) return;
+        Ajustes.guardarAparcamiento(this, l.getLatitude(), l.getLongitude());
+        maxVelocidad = 0; // para no guardarlo dos veces
+        notificar("Aparcamiento guardado", "Toca para ver dónde has dejado el coche", 0xFF2EE6A6, ID_AVISO + 3);
     }
 
     // ---------- Lógica de avisos ----------
@@ -231,6 +408,8 @@ public class RadarService extends Service implements LocationListener {
         }
 
         if (hiloTrafico != null) revisarTrafico(loc, kmh, hayRumbo, rumbo);
+        if (!tramos.isEmpty()) revisarTramo(loc, kmh, hayRumbo, rumbo);
+        maxVelocidad = Math.max(maxVelocidad, kmh);
 
         // Estado para la pantalla
         hayGps = true;
@@ -249,7 +428,9 @@ public class RadarService extends Service implements LocationListener {
                 nivel.put(cercano, ahoraNivel);
                 int umbral = UMBRALES[ahoraNivel - 1];
                 boolean rapido = cercano.limite > 0 && kmh > cercano.limite + 3;
-                if (antes == 0) {
+                if (Ajustes.soloSiMePaso(this) && !rapido) {
+                    // Opción «solo si me paso»: no se avisa
+                } else if (antes == 0) {
                     // Primer aviso de este radar (normalmente a 500 m)
                     avisar(cercano, umbral == 500 ? 500 : redondear(dCercano), rapido);
                 } else if (rapido || umbral == 100 || umbral == 50) {
@@ -278,19 +459,49 @@ public class RadarService extends Service implements LocationListener {
         String frase = (r.propio ? "Aviso a " : "Radar a ") + metros + " metros";
         if (r.limite > 0) frase += ", límite " + r.limite;
         if (exceso) frase += ". Reduce la velocidad";
-        pitar();
-        hablar(frase);
+        emitir(frase);
+        notificar(r.propio ? "Aviso" : "Radar", frase, 0xFFFF4D5E, ID_AVISO);
+    }
 
+    /** Avisa según el tipo elegido: voz, solo pitido o solo vibración. */
+    private void emitir(String frase) {
+        switch (Ajustes.tipoAviso(this)) {
+            case Ajustes.AVISO_PITIDO:
+                pitar();
+                break;
+            case Ajustes.AVISO_VIBRACION:
+                vibrar();
+                break;
+            default:
+                pitar();
+                hablar(frase);
+                break;
+        }
+    }
+
+    private void vibrar() {
+        try {
+            Vibrator v = getSystemService(Vibrator.class);
+            if (v != null) v.vibrate(VibrationEffect.createWaveform(new long[]{0, 400, 200, 400}, -1));
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void notificar(String titulo, String texto, int color, int id) {
+        PendingIntent abrir = PendingIntent.getActivity(this, id,
+                new Intent(this, MainActivity.class),
+                PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
         Notification n = new Notification.Builder(this, CANAL_AVISO)
                 .setSmallIcon(R.drawable.ic_notif)
-                .setColor(0xFFFF4D5E)
-                .setContentTitle(r.propio ? "Aviso" : "Radar")
-                .setContentText(frase)
+                .setColor(color)
+                .setContentTitle(titulo)
+                .setContentText(texto)
+                .setContentIntent(abrir)
                 .setAutoCancel(true)
-                .setTimeoutAfter(20000)
+                .setTimeoutAfter(30000)
                 .setCategory(Notification.CATEGORY_NAVIGATION)
                 .build();
-        getSystemService(NotificationManager.class).notify(ID_AVISO, n);
+        getSystemService(NotificationManager.class).notify(id, n);
     }
 
     private void pitar() {

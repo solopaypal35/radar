@@ -132,6 +132,7 @@ public class MapaActivity extends Activity {
         setContentView(raiz);
         pintarBotones();
         cargarRadares();
+        pintarAparcamiento();
     }
 
     @Override
@@ -248,6 +249,33 @@ public class MapaActivity extends Activity {
         d.setBounds(0, 0, w, h);
         d.draw(c);
         return b;
+    }
+
+    /** Marca «P» verde donde has dejado el coche. */
+    private void pintarAparcamiento() {
+        if (!Ajustes.hayAparcamiento(this)) return;
+        Marker m = new Marker(mapa);
+        m.setPosition(new GeoPoint(Ajustes.aparcLat(this), Ajustes.aparcLon(this)));
+        m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_CENTER);
+        int t = dp(30);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(t, t, android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(b);
+        Paint fondo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fondo.setColor(MainActivity.VERDE);
+        c.drawCircle(t / 2f, t / 2f, t / 2f - dp(1), fondo);
+        fondo.setColor(Color.WHITE);
+        fondo.setStyle(Paint.Style.STROKE);
+        fondo.setStrokeWidth(dp(2));
+        c.drawCircle(t / 2f, t / 2f, t / 2f - dp(1), fondo);
+        Paint letra = new Paint(Paint.ANTI_ALIAS_FLAG);
+        letra.setColor(MainActivity.FONDO);
+        letra.setTextSize(dp(17));
+        letra.setTypeface(Typeface.DEFAULT_BOLD);
+        letra.setTextAlign(Paint.Align.CENTER);
+        c.drawText("P", t / 2f, t / 2f + dp(6), letra);
+        m.setIcon(new android.graphics.drawable.BitmapDrawable(getResources(), b));
+        m.setTitle("Tu coche");
+        mapa.getOverlays().add(m);
     }
 
     private GradientDrawable circulo(int color) {

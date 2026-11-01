@@ -48,7 +48,8 @@ public class MainActivity extends Activity {
     static final int DIAS_ACTUALIZAR = 30;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextView botonActivar, botonMapa;
+    private TextView botonActivar, botonMapa, aparcTexto, tipoAviso;
+    private double aparcLatMostrada = Double.NaN;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
     private ObjectAnimator latidoRadares;
@@ -144,6 +145,50 @@ public class MainActivity extends Activity {
         pulsable(tarjetaBateria, v -> pedirSinOptimizar());
         col.addView(tarjetaBateria, margenArriba(12));
 
+        // Dónde he aparcado
+        LinearLayout aparc = tarjeta();
+        aparc.addView(texto("Dónde he aparcado", 16, TEXTO, true));
+        aparcTexto = texto("", 13, SUB, false);
+        aparcTexto.setPadding(0, dp(2), 0, dp(10));
+        aparc.addView(aparcTexto);
+        LinearLayout filaAparc = new LinearLayout(this);
+        TextView guardar = botonPequeno("Guardar aquí");
+        pulsable(guardar, v -> guardarAparcamientoManual());
+        TextView llegar = botonPequeno("Cómo llegar");
+        pulsable(llegar, v -> comoLlegar());
+        TextView whatsapp = botonPequeno("WhatsApp");
+        whatsapp.setTextColor(VERDE);
+        pulsable(whatsapp, v -> enviarWhatsApp());
+        filaAparc.addView(guardar, pesoBoton());
+        filaAparc.addView(llegar, pesoBoton());
+        filaAparc.addView(whatsapp, pesoBoton());
+        aparc.addView(filaAparc);
+        col.addView(aparc, margenArriba(12));
+
+        // Música (Spotify u otra app que esté sonando)
+        LinearLayout musica = tarjeta();
+        musica.addView(texto("Música", 16, TEXTO, true));
+        LinearLayout filaMusica = new LinearLayout(this);
+        filaMusica.setPadding(0, dp(10), 0, 0);
+        TextView ant = botonPequeno("⏮");
+        ant.setTextSize(20);
+        pulsable(ant, v -> Musica.anterior(this));
+        TextView pp = botonPequeno("⏯");
+        pp.setTextSize(20);
+        pulsable(pp, v -> Musica.playPausa(this));
+        TextView sig = botonPequeno("⏭");
+        sig.setTextSize(20);
+        pulsable(sig, v -> Musica.siguiente(this));
+        TextView spotify = botonPequeno("Spotify");
+        spotify.setTextColor(VERDE);
+        pulsable(spotify, v -> Musica.abrirSpotify(this));
+        filaMusica.addView(ant, pesoBoton());
+        filaMusica.addView(pp, pesoBoton());
+        filaMusica.addView(sig, pesoBoton());
+        filaMusica.addView(spotify, pesoBoton());
+        musica.addView(filaMusica);
+        col.addView(musica, margenArriba(12));
+
         // Opciones
         LinearLayout opciones = tarjeta();
         opciones.addView(texto("Opciones", 16, TEXTO, true));
@@ -161,6 +206,46 @@ public class MainActivity extends Activity {
             reiniciarSiActivo();
         });
         opciones.addView(interTrafico);
+
+        tipoAviso = texto("", 14, TEXTO, false);
+        tipoAviso.setPadding(0, dp(14), 0, dp(6));
+        pulsable(tipoAviso, v -> {
+            int t = (Ajustes.tipoAviso(this) + 1) % 3;
+            Ajustes.setTipoAviso(this, t);
+            pintarTipoAviso();
+        });
+        pintarTipoAviso();
+        opciones.addView(tipoAviso);
+
+        Switch interSolo = interruptor("Avisar solo si me paso",
+                "Radares y tramos solo suenan si vas por encima del límite", Ajustes.soloSiMePaso(this));
+        interSolo.setOnCheckedChangeListener((b, activado) -> Ajustes.setSoloSiMePaso(this, activado));
+        opciones.addView(interSolo);
+
+        Switch interBurbuja = interruptor("Burbuja flotante",
+                "Velocidad, límite y radar encima de Maps o Waze", Ajustes.burbuja(this));
+        interBurbuja.setOnCheckedChangeListener((b, activado) -> {
+            Ajustes.setBurbuja(this, activado);
+            if (activado && !Burbuja.tienePermiso(this)) {
+                toast("Activa «Mostrar sobre otras apps» para AvisaRadar y vuelve");
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName())));
+            }
+            reiniciarSiActivo();
+        });
+        opciones.addView(interBurbuja);
+
+        Switch interAparcar = interruptor("Guardar aparcamiento automático",
+                "Al parar los avisos o desconectarse el Bluetooth del coche", Ajustes.aparcarAuto(this));
+        interAparcar.setOnCheckedChangeListener((b, activado) -> {
+            Ajustes.setAparcarAuto(this, activado);
+            if (activado && Build.VERSION.SDK_INT >= 31
+                    && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                    != PackageManager.PERMISSION_GRANTED) {
+                requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 3);
+            }
+        });
+        opciones.addView(interAparcar);
         col.addView(opciones, margenArriba(12));
 
         TextView ayuda = texto("Activa los avisos y abre Google Maps o Waze: AvisaRadar seguirá "
@@ -201,6 +286,7 @@ public class MainActivity extends Activity {
     }
 
     private void refrescar() {
+        refrescarAparcamiento();
         botonMapa.setVisibility(Ajustes.usarMapa(this) ? View.VISIBLE : View.GONE);
         // Botón principal
         if (RadarService.activo) {
@@ -300,6 +386,11 @@ public class MainActivity extends Activity {
     @Override
     public void onRequestPermissionsResult(int code, String[] permisos, int[] resultados) {
         super.onRequestPermissionsResult(code, permisos, resultados);
+        if (code == 4) {
+            guardarAparcamientoManual();
+            return;
+        }
+        if (code != 1) return;
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
             iniciar();
@@ -338,6 +429,11 @@ public class MainActivity extends Activity {
         new Thread(() -> {
             try {
                 int n = RadarDB.descargar(this);
+                try {
+                    TramosDB.descargar(this);
+                } catch (Exception ignored) {
+                    // Si fallan los tramos, se siguen usando los que ya había
+                }
                 runOnUiThread(() -> {
                     descargando = false;
                     radaresAccion.setText("Actualizar");
@@ -405,6 +501,134 @@ public class MainActivity extends Activity {
         t.setTextColor(color);
         if (negrita) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         return t;
+    }
+
+    private void pintarTipoAviso() {
+        tipoAviso.setText("Tipo de aviso:  " + Ajustes.nombreTipoAviso(Ajustes.tipoAviso(this))
+                + "   (toca para cambiar)");
+    }
+
+    // ---------- Dónde he aparcado ----------
+
+    private void refrescarAparcamiento() {
+        if (!Ajustes.hayAparcamiento(this)) {
+            aparcTexto.setText("Aún no hay ninguno guardado");
+            return;
+        }
+        double lat = Ajustes.aparcLat(this), lon = Ajustes.aparcLon(this);
+        long min = (System.currentTimeMillis() - Ajustes.aparcHora(this)) / 60000;
+        String hace = min < 1 ? "ahora mismo" : min < 60 ? "hace " + min + " min"
+                : min < 48 * 60 ? "hace " + (min / 60) + " h" : "hace " + (min / 1440) + " días";
+        String actual = aparcTexto.getText().toString();
+        int punto = actual.indexOf(" · ");
+        String direccion = (lat == aparcLatMostrada && punto > 0) ? actual.substring(punto) : "";
+        aparcTexto.setText("Guardado " + hace + direccion);
+        if (lat != aparcLatMostrada) {
+            aparcLatMostrada = lat;
+            new Thread(() -> {
+                String calle = direccion(lat, lon);
+                if (calle != null) runOnUiThread(() -> aparcTexto.setText("Guardado " + hace + " · " + calle));
+            }).start();
+        }
+    }
+
+    private String direccion(double lat, double lon) {
+        try {
+            android.location.Geocoder g = new android.location.Geocoder(this, new java.util.Locale("es", "ES"));
+            List<android.location.Address> lista = g.getFromLocation(lat, lon, 1);
+            if (lista != null && !lista.isEmpty()) {
+                android.location.Address a = lista.get(0);
+                String calle = a.getThoroughfare();
+                if (calle == null) return a.getLocality();
+                return calle + (a.getSubThoroughfare() != null ? " " + a.getSubThoroughfare() : "");
+            }
+        } catch (Exception ignored) {
+        }
+        return null;
+    }
+
+    private void guardarAparcamientoManual() {
+        Location l = RadarService.ultima;
+        if (l != null && System.currentTimeMillis() - l.getTime() < 60000) {
+            guardarEn(l);
+            return;
+        }
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, 4);
+            return;
+        }
+        toast("Buscando tu posición…");
+        android.location.LocationManager lm =
+                (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+        try {
+            if (Build.VERSION.SDK_INT >= 30) {
+                lm.getCurrentLocation(android.location.LocationManager.GPS_PROVIDER, null,
+                        getMainExecutor(), loc -> {
+                            if (loc != null) guardarEn(loc);
+                            else toast("No hay señal GPS. Prueba al aire libre.");
+                        });
+            } else {
+                lm.requestSingleUpdate(android.location.LocationManager.GPS_PROVIDER,
+                        this::guardarEn, Looper.getMainLooper());
+            }
+        } catch (Exception e) {
+            toast("No se pudo obtener la posición");
+        }
+    }
+
+    private void guardarEn(Location l) {
+        Ajustes.guardarAparcamiento(this, l.getLatitude(), l.getLongitude());
+        aparcLatMostrada = Double.NaN;
+        toast("Aparcamiento guardado");
+        refrescarAparcamiento();
+    }
+
+    private String enlaceAparcamiento() {
+        return String.format(java.util.Locale.US, "https://maps.google.com/?q=%.6f,%.6f",
+                Ajustes.aparcLat(this), Ajustes.aparcLon(this));
+    }
+
+    private void comoLlegar() {
+        if (!Ajustes.hayAparcamiento(this)) {
+            toast("Primero guarda dónde has aparcado");
+            return;
+        }
+        String url = String.format(java.util.Locale.US,
+                "https://www.google.com/maps/dir/?api=1&destination=%.6f,%.6f&travelmode=walking",
+                Ajustes.aparcLat(this), Ajustes.aparcLon(this));
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse(url)));
+        } catch (Exception e) {
+            toast("No hay ninguna app de mapas");
+        }
+    }
+
+    private void enviarWhatsApp() {
+        if (!Ajustes.hayAparcamiento(this)) {
+            toast("Primero guarda dónde has aparcado");
+            return;
+        }
+        Intent i = new Intent(Intent.ACTION_SEND);
+        i.setType("text/plain");
+        i.putExtra(Intent.EXTRA_TEXT, "Mi coche está aparcado aquí: " + enlaceAparcamiento());
+        for (String app : new String[]{"com.whatsapp", "com.whatsapp.w4b"}) {
+            try {
+                i.setPackage(app);
+                startActivity(i);
+                return;
+            } catch (Exception ignored) {
+            }
+        }
+        i.setPackage(null);
+        startActivity(Intent.createChooser(i, "Enviar ubicación"));
+    }
+
+    private LinearLayout.LayoutParams pesoBoton() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(46), 1f);
+        lp.setMargins(dp(3), 0, dp(3), 0);
+        return lp;
     }
 
     private Switch interruptor(String titulo, String sub, boolean activado) {

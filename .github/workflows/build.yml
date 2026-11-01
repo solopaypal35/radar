@@ -39,6 +39,30 @@ jobs:
           cp datos/radares.json app/src/main/assets/radares.json
           echo "Servidor sin respuesta: se usa la copia guardada ($(grep -o '"lat"' app/src/main/assets/radares.json | wc -l) radares)"
 
+      - name: Incluir radares de tramo (OpenStreetMap)
+        continue-on-error: true
+        run: |
+          mkdir -p app/src/main/assets datos
+          Q='[out:json][timeout:90];(relation["enforcement"="average_speed"](35.1,-9.6,43.9,4.5);relation["enforcement"="average_speed"](27.5,-18.3,29.5,-13.3););out body;>;out skel qt;'
+          for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+            echo "Probando $URL"
+            if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/tramos.json \
+               && grep -q '"relation"' app/src/main/assets/tramos.json; then
+              echo "Tramos incluidos: $(grep -o '"type": "relation"' app/src/main/assets/tramos.json | wc -l)"
+              cp app/src/main/assets/tramos.json datos/tramos.json
+              exit 0
+            fi
+          done
+          if [ -f datos/tramos.json ]; then cp datos/tramos.json app/src/main/assets/tramos.json; echo "Se usa la copia guardada de tramos"; else rm -f app/src/main/assets/tramos.json; echo "Sin tramos"; fi
+
+      - name: Guardar copia de los datos en el repositorio
+        continue-on-error: true
+        run: |
+          git config user.name "AvisaRadar"
+          git config user.email "avisaradar@users.noreply.github.com"
+          git add datos
+          git diff --cached --quiet || (git commit -m "Actualiza la copia de radares y tramos [skip ci]" && git push)
+
       - name: Compilar APK
         run: gradle assembleDebug --no-daemon
 

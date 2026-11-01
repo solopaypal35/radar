@@ -163,14 +163,35 @@ public class RadarDB {
     }
 
     static String pedir(String servidor) throws IOException {
+        return pedir(servidor, CONSULTA);
+    }
+
+    /** Prueba los servidores uno a uno hasta que uno responda. */
+    static String consultar(String consulta, int timeoutMs) throws IOException {
+        IOException ultimo = null;
+        for (String servidor : SERVIDORES) {
+            try {
+                return pedir(servidor, consulta, timeoutMs);
+            } catch (IOException e) {
+                ultimo = e;
+            }
+        }
+        throw ultimo != null ? ultimo : new IOException("Sin servidores");
+    }
+
+    static String pedir(String servidor, String consulta) throws IOException {
+        return pedir(servidor, consulta, 100000);
+    }
+
+    static String pedir(String servidor, String consulta, int timeoutMs) throws IOException {
         HttpURLConnection con = (HttpURLConnection) new URL(servidor).openConnection();
         con.setConnectTimeout(20000);
-        con.setReadTimeout(100000);
+        con.setReadTimeout(timeoutMs);
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
         con.setRequestProperty("User-Agent", "AvisaRadar/1.0 (app personal)");
-        byte[] cuerpo = ("data=" + URLEncoder.encode(CONSULTA, "UTF-8")).getBytes(StandardCharsets.UTF_8);
+        byte[] cuerpo = ("data=" + URLEncoder.encode(consulta, "UTF-8")).getBytes(StandardCharsets.UTF_8);
         try (OutputStream out = con.getOutputStream()) {
             out.write(cuerpo);
         }

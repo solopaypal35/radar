@@ -62,10 +62,12 @@ public class RadarView extends View {
         boolean activo = RadarService.activo;
         boolean gps = RadarService.hayGps;
         int dist = RadarService.distancia;
-        int lim = RadarService.limite;
-        boolean exceso = RadarService.exceso;
+        int lim = RadarService.limiteMostrado();
+        // Rojo si te pasas cerca de un radar, o del límite de la vía o del tramo
+        boolean exceso = RadarService.exceso
+                || (activo && gps && lim > 0 && RadarService.velocidad > lim + 3);
 
-        int color = !activo ? GRIS : exceso ? ROJO : (dist >= 0 ? AMBAR : VERDE);
+        int color = !activo ? GRIS : exceso ? ROJO : (dist >= 0 || RadarService.enTramo ? AMBAR : VERDE);
 
         // Latido cuando vas rápido cerca de un radar
         float escala = exceso ? 1f + 0.025f * (float) Math.sin(t * 9) : 1f;
@@ -144,6 +146,17 @@ public class RadarView extends View {
         c.drawText(estado, cx, cy + r * 0.52f, texto);
         texto.setTypeface(Typeface.DEFAULT);
 
+        // Radar de tramo: media en tiempo real
+        if (activo && RadarService.enTramo) {
+            int media = RadarService.mediaTramo;
+            boolean pasado = RadarService.limiteTramo > 0 && media > RadarService.limiteTramo;
+            texto.setColor(pasado ? ROJO : AMBAR);
+            texto.setTextSize(14 * d);
+            texto.setTypeface(Typeface.DEFAULT_BOLD);
+            c.drawText("TRAMO · media " + (media > 0 ? media : "--") + " km/h", cx, cy - r * 0.42f, texto);
+            texto.setTypeface(Typeface.DEFAULT);
+        }
+
         // Incidencia de tráfico delante (DGT)
         String inc = RadarService.incidenciaTexto;
         if (activo && inc != null) {
@@ -153,7 +166,7 @@ public class RadarView extends View {
         }
 
         // Señal de límite de velocidad
-        if (activo && dist >= 0 && lim > 0) {
+        if (activo && lim > 0) {
             float sr = 26 * d;
             float sx = w - sr - 8 * d, sy = h - sr - 8 * d;
             punto.setColor(Color.WHITE);
