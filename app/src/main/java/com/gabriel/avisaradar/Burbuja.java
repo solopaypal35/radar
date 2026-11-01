@@ -11,33 +11,36 @@ import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
+import android.util.DisplayMetrics;
 import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
-import android.widget.TextView;
 
 /**
- * Burbuja flotante encima de otras apps (Maps, Waze…): velocidad, límite y próximo radar.
- * Se puede arrastrar. Al tocarla se despliegan los controles de música.
+ * Burbuja flotante encima de otras apps (Maps, Waze…), con el mismo estilo que el velocímetro
+ * de la app: fondo negro, velocidad en números de puntos y anillo de puntos.
+ * Se arrastra con el dedo. Al tocarla aparecen los controles en una ventana aparte,
+ * así la burbuja no se mueve de sitio.
  */
 public class Burbuja {
 
     private final Context ctx;
     private final WindowManager wm;
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private LinearLayout raiz;
     private Circulo circulo;
     private LinearLayout panel;
-    private WindowManager.LayoutParams lp;
-    private boolean visible = false;
+    private WindowManager.LayoutParams lp, lpPanel;
+    private boolean visible = false, panelVisible = false;
 
     private final Runnable tic = new Runnable() {
         @Override
         public void run() {
             if (circulo != null) circulo.invalidate();
-            handler.postDelayed(this, 500);
+            handler.postDelayed(this, 250);
         }
     };
 
@@ -50,48 +53,25 @@ public class Burbuja {
         return Settings.canDrawOverlays(c);
     }
 
-    public void mostrar() {
-        if (visible || !tienePermiso(ctx)) return;
-        raiz = new LinearLayout(ctx);
-        raiz.setOrientation(LinearLayout.VERTICAL);
-        raiz.setGravity(Gravity.CENTER_HORIZONTAL);
-
-        circulo = new Circulo(ctx);
-        raiz.addView(circulo, new LinearLayout.LayoutParams(dp(84), dp(84)));
-
-        panel = new LinearLayout(ctx);
-        panel.setOrientation(LinearLayout.HORIZONTAL);
-        GradientDrawable fondo = new GradientDrawable();
-        fondo.setColor(0xEE16213A);
-        fondo.setCornerRadius(dp(22));
-        fondo.setStroke(dp(1), MainActivity.BORDE);
-        panel.setBackground(fondo);
-        panel.setPadding(dp(4), dp(2), dp(4), dp(2));
-        panel.addView(boton("⏮", v -> Musica.anterior(ctx)));
-        panel.addView(boton("⏯", v -> Musica.playPausa(ctx)));
-        panel.addView(boton("⏭", v -> Musica.siguiente(ctx)));
-        panel.addView(boton("▣", v -> {
-            Intent i = new Intent(ctx, MainActivity.class);
-            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
-            ctx.startActivity(i);
-        }));
-        TextView cerrar = boton("✕", v -> ocultar());
-        cerrar.setTextColor(RadarView.ROJO);
-        panel.addView(cerrar);
-        panel.setVisibility(View.GONE);
-        LinearLayout.LayoutParams lpPanel = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.WRAP_CONTENT, dp(44));
-        lpPanel.topMargin = dp(6);
-        raiz.addView(panel, lpPanel);
-
-        lp = new WindowManager.LayoutParams(
+    private static WindowManager.LayoutParams parametros() {
+        WindowManager.LayoutParams p = new WindowManager.LayoutParams(
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.WRAP_CONTENT,
                 WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-                        | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
                 PixelFormat.TRANSLUCENT);
-        lp.gravity = Gravity.TOP | Gravity.START;
+        p.gravity = Gravity.TOP | Gravity.START;
+        return p;
+    }
+
+    public void mostrar() {
+        if (visible || !tienePermiso(ctx)) return;
+
+        // ---------- El círculo (ventana propia, tamaño fijo) ----------
+        circulo = new Circulo(ctx);
+        lp = parametros();
+        lp.width = dp(96);
+        lp.height = dp(96);
         lp.x = Ajustes.burbujaX(ctx);
         lp.y = Ajustes.burbujaY(ctx);
 
@@ -112,12 +92,15 @@ public class Burbuja {
                         return true;
                     case MotionEvent.ACTION_MOVE:
                         float dx = e.getRawX() - x0, dy = e.getRawY() - y0;
-                        if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) movido = true;
+                        if (Math.abs(dx) > dp(6) || Math.abs(dy) > dp(6)) {
+                            if (!movido) ocultarPanel();
+                            movido = true;
+                        }
                         if (movido) {
                             lp.x = lx0 + (int) dx;
                             lp.y = ly0 + (int) dy;
                             try {
-                                wm.updateViewLayout(raiz, lp);
+                                wm.updateViewLayout(circulo, lp);
                             } catch (Exception ignored) {
                             }
                         }
@@ -125,8 +108,10 @@ public class Burbuja {
                     case MotionEvent.ACTION_UP:
                         if (movido) {
                             Ajustes.setBurbujaPos(ctx, lp.x, lp.y);
+                        } else if (panelVisible) {
+                            ocultarPanel();
                         } else {
-                            panel.setVisibility(panel.getVisibility() == View.VISIBLE ? View.GONE : View.VISIBLE);
+                            mostrarPanel();
                         }
                         return true;
                     default:
@@ -135,8 +120,30 @@ public class Burbuja {
             }
         });
 
+        // ---------- Panel de controles (ventana aparte, debajo del círculo) ----------
+        panel = new LinearLayout(ctx);
+        panel.setOrientation(LinearLayout.HORIZONTAL);
+        panel.setGravity(Gravity.CENTER_VERTICAL);
+        GradientDrawable fondo = new GradientDrawable();
+        fondo.setColor(0xF2131718);
+        fondo.setCornerRadius(dp(28));
+        fondo.setStroke(dp(1), Pantalla.BORDE);
+        panel.setBackground(fondo);
+        panel.setPadding(dp(6), dp(6), dp(6), dp(6));
+        panel.addView(boton(R.drawable.ic_anterior, Pantalla.TEXTO, false, v -> Musica.anterior(ctx)));
+        panel.addView(boton(R.drawable.ic_play, 0xFF061012, true, v -> Musica.playPausa(ctx)));
+        panel.addView(boton(R.drawable.ic_siguiente, Pantalla.TEXTO, false, v -> Musica.siguiente(ctx)));
+        panel.addView(boton(R.drawable.ic_inicio, Pantalla.TEXTO, false, v -> {
+            ocultarPanel();
+            Intent i = new Intent(ctx, MainActivity.class);
+            i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
+            ctx.startActivity(i);
+        }));
+        panel.addView(boton(R.drawable.ic_cerrar, Pantalla.ROJO, false, v -> ocultar()));
+        lpPanel = parametros();
+
         try {
-            wm.addView(raiz, lp);
+            wm.addView(circulo, lp);
             visible = true;
             handler.post(tic);
         } catch (Exception e) {
@@ -144,44 +151,77 @@ public class Burbuja {
         }
     }
 
+    /** Coloca el panel centrado bajo el círculo (o encima, si no cabe), sin salirse de la pantalla. */
+    private void mostrarPanel() {
+        if (panelVisible) return;
+        DisplayMetrics dm = ctx.getResources().getDisplayMetrics();
+        panel.measure(View.MeasureSpec.UNSPECIFIED, View.MeasureSpec.UNSPECIFIED);
+        int pw = panel.getMeasuredWidth(), ph = panel.getMeasuredHeight();
+        int x = lp.x + lp.width / 2 - pw / 2;
+        x = Math.max(dp(8), Math.min(x, dm.widthPixels - pw - dp(8)));
+        int y = lp.y + lp.height + dp(6);
+        if (y + ph > dm.heightPixels - dp(40)) y = lp.y - ph - dp(6);
+        lpPanel.x = x;
+        lpPanel.y = y;
+        try {
+            wm.addView(panel, lpPanel);
+            panelVisible = true;
+        } catch (Exception ignored) {
+        }
+    }
+
+    private void ocultarPanel() {
+        if (!panelVisible) return;
+        try {
+            wm.removeView(panel);
+        } catch (Exception ignored) {
+        }
+        panelVisible = false;
+    }
+
     public void ocultar() {
         handler.removeCallbacks(tic);
-        if (visible && raiz != null) {
+        ocultarPanel();
+        if (visible && circulo != null) {
             try {
-                wm.removeView(raiz);
+                wm.removeView(circulo);
             } catch (Exception ignored) {
             }
         }
         visible = false;
     }
 
-    private TextView boton(String s, View.OnClickListener l) {
-        TextView t = new TextView(ctx);
-        t.setText(s);
-        t.setTextSize(20);
-        t.setTextColor(MainActivity.TEXTO);
-        t.setGravity(Gravity.CENTER);
-        t.setOnClickListener(l);
-        t.setLayoutParams(new LinearLayout.LayoutParams(dp(46), LinearLayout.LayoutParams.MATCH_PARENT));
-        return t;
+    /** Botón redondo con icono centrado. */
+    private FrameLayout boton(int icono, int color, boolean principal, View.OnClickListener l) {
+        FrameLayout f = new FrameLayout(ctx);
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(principal ? Pantalla.VERDE : 0x00000000);
+        f.setBackground(g);
+        ImageView i = new ImageView(ctx);
+        i.setImageResource(icono);
+        i.setColorFilter(color);
+        f.addView(i, new FrameLayout.LayoutParams(dp(20), dp(20), Gravity.CENTER));
+        f.setOnClickListener(l);
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(44), dp(44));
+        p.setMargins(dp(2), 0, dp(2), 0);
+        f.setLayoutParams(p);
+        return f;
     }
 
     private int dp(int v) {
         return Math.round(v * ctx.getResources().getDisplayMetrics().density);
     }
 
-    /** El círculo: velocidad grande, señal de límite y distancia al radar. */
+    /** El círculo: fondo negro, anillo de puntos y velocidad con números de puntos. */
     static class Circulo extends View {
-        final Paint fondo = new Paint(Paint.ANTI_ALIAS_FLAG);
-        final Paint borde = new Paint(Paint.ANTI_ALIAS_FLAG);
+        final Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint texto = new Paint(Paint.ANTI_ALIAS_FLAG);
         final Paint senal = new Paint(Paint.ANTI_ALIAS_FLAG);
 
         Circulo(Context c) {
             super(c);
-            borde.setStyle(Paint.Style.STROKE);
             texto.setTextAlign(Paint.Align.CENTER);
-            texto.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
             senal.setTextAlign(Paint.Align.CENTER);
             senal.setTypeface(Typeface.DEFAULT_BOLD);
         }
@@ -190,51 +230,76 @@ public class Burbuja {
         protected void onDraw(Canvas c) {
             float d = getResources().getDisplayMetrics().density;
             float w = getWidth(), h = getHeight();
-            float cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f - 3 * d;
+            float cx = w / 2f, cy = h / 2f, r = Math.min(w, h) / 2f - 2 * d;
+            int color = VelocimetroView.colorEstado();
+            boolean activo = RadarService.activo && RadarService.hayGps;
+            int vel = RadarService.velocidad;
 
-            int lim = RadarService.limiteMostrado();
-            boolean rapido = RadarService.exceso
-                    || (lim > 0 && RadarService.velocidad > lim + 3);
-            int color = rapido ? RadarView.ROJO
-                    : RadarService.distancia >= 0 || RadarService.enTramo ? RadarView.AMBAR : RadarView.VERDE;
+            // Fondo negro con borde fino
+            p.setStyle(Paint.Style.FILL);
+            p.setColor(0xF207090A);
+            c.drawCircle(cx, cy, r, p);
+            p.setStyle(Paint.Style.STROKE);
+            p.setStrokeWidth(1.2f * d);
+            p.setColor(Pantalla.BORDE);
+            c.drawCircle(cx, cy, r, p);
+            p.setStyle(Paint.Style.FILL);
 
-            fondo.setColor(0xEE0B1220);
-            c.drawCircle(cx, cy, r, fondo);
-            borde.setColor(color);
-            borde.setStrokeWidth(4 * d);
-            c.drawCircle(cx, cy, r, borde);
-
-            texto.setColor(rapido ? RadarView.ROJO : Color.WHITE);
-            texto.setTextSize(26 * d);
-            c.drawText(RadarService.hayGps ? String.valueOf(RadarService.velocidad) : "--",
-                    cx, cy + 6 * d, texto);
-
-            texto.setTextSize(10 * d);
-            texto.setColor(color);
-            String abajo;
-            if (RadarService.enTramo) {
-                abajo = "media " + RadarService.mediaTramo;
-            } else if (RadarService.distancia >= 0) {
-                abajo = (Math.round(RadarService.distancia / 10f) * 10) + " m";
-            } else {
-                abajo = "km/h";
+            // Anillo de puntos (270°, abierto abajo) que se enciende con la velocidad
+            int n = 24;
+            int on = activo ? Math.round(Math.min(1f, vel / (float) VelocimetroView.VELOCIDAD_MAX) * n) : 0;
+            float ra = r - 7 * d;
+            for (int i = 0; i < n; i++) {
+                double a = Math.toRadians(135 + 270.0 * i / (n - 1));
+                p.setColor(i < on ? color : Pantalla.HUNDIDO);
+                c.drawCircle(cx + ra * (float) Math.cos(a), cy + ra * (float) Math.sin(a), (i < on ? 2.3f : 1.8f) * d, p);
             }
-            c.drawText(abajo, cx, cy + 22 * d, texto);
 
-            // Señal de límite en la esquina
-            if (lim > 0) {
-                float sr = 13 * d, sx = w - sr - 1 * d, sy = sr + 1 * d;
-                senal.setColor(Color.WHITE);
+            // Velocidad en números de puntos
+            String v = activo ? String.valueOf(vel) : "--";
+            float paso = 3.3f * d, radio = paso * 0.38f;
+            float anchoDig = 5 * paso, hueco = paso * 1.1f;
+            float ancho = v.length() * anchoDig + (v.length() - 1) * hueco;
+            float x0 = cx - ancho / 2f + paso / 2f, y0 = cy - 3.5f * paso - 3 * d;
+            p.setColor(color == Pantalla.ROJO ? Pantalla.ROJO : Color.WHITE);
+            for (int k = 0; k < v.length(); k++) {
+                char ch = v.charAt(k);
+                String[] g = VelocimetroView.DIGITOS[ch == '-' ? 10 : ch - '0'];
+                for (int fila = 0; fila < 7; fila++) {
+                    for (int col = 0; col < 5; col++) {
+                        if (g[fila].charAt(col) == '1') {
+                            c.drawCircle(x0 + k * (anchoDig + hueco) + col * paso, y0 + fila * paso, radio, p);
+                        }
+                    }
+                }
+            }
+
+            // Debajo: distancia al radar, media del tramo o «km/h»
+            String abajo;
+            if (RadarService.enTramo) abajo = "media " + RadarService.mediaTramo;
+            else if (RadarService.distancia >= 0) abajo = (Math.round(RadarService.distancia / 10f) * 10) + " m";
+            else abajo = "km/h";
+            texto.setColor(abajo.equals("km/h") ? Pantalla.SUB : color);
+            texto.setTextSize(10 * d);
+            texto.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
+            c.drawText(abajo, cx, y0 + 7 * paso + 11 * d, texto);
+
+            // Señal de límite pequeña, arriba a la derecha
+            int lim = RadarService.limiteMostrado();
+            if (RadarService.activo && lim > 0) {
+                float sr = 12 * d, sx = w - sr - 1 * d, sy = sr + 1 * d;
                 senal.setStyle(Paint.Style.FILL);
+                senal.setColor(Color.WHITE);
                 c.drawCircle(sx, sy, sr, senal);
                 senal.setStyle(Paint.Style.STROKE);
-                senal.setStrokeWidth(3 * d);
+                senal.setStrokeWidth(2.6f * d);
                 senal.setColor(0xFFE0262F);
-                c.drawCircle(sx, sy, sr - 1.5f * d, senal);
+                c.drawCircle(sx, sy, sr - 1.3f * d, senal);
                 senal.setStyle(Paint.Style.FILL);
                 senal.setColor(Color.BLACK);
-                senal.setTextSize(lim >= 100 ? 9 * d : 11 * d);
-                c.drawText(String.valueOf(lim), sx, sy + 4 * d, senal);
+                senal.setTextSize(lim >= 100 ? 8.5f * d : 10.5f * d);
+                Paint.FontMetrics fm = senal.getFontMetrics();
+                c.drawText(String.valueOf(lim), sx, sy - (fm.ascent + fm.descent) / 2f, senal);
             }
         }
     }
