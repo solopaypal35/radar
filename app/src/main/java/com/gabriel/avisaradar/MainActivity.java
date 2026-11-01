@@ -44,6 +44,7 @@ public class MainActivity extends Pantalla {
     static final int VERDE_ENCENDER = 0xFF22C55E;
     private TextView estadoCabecera, aparcTexto, titularHero, etiquetaHero, senalLimite, botonMapa;
     private VelocimetroView velocimetro;
+    private BarraTramo barraTramo;
     private double aparcLatMostrada = Double.NaN;
     private ImageView fotoAparc;
     private String fotoMostrada = null;
@@ -137,6 +138,11 @@ public class MainActivity extends Pantalla {
         titularHero.setLineSpacing(0, 0.95f);
         titularHero.setPadding(0, dp(10), 0, 0);
         hero.addView(titularHero);
+        barraTramo = new BarraTramo(this);
+        LinearLayout.LayoutParams lpBarra2 = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(58));
+        lpBarra2.topMargin = dp(16);
+        hero.addView(barraTramo, lpBarra2);
         velocimetro = new VelocimetroView(this);
         LinearLayout.LayoutParams lpVel = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -292,6 +298,7 @@ public class MainActivity extends Pantalla {
         estadoCabecera.setTextColor(activo ? VERDE : SUB);
         estadoCabecera.setBackground(redondo(TARJETA, BORDE, 19));
         // Titular grande según la pestaña
+        barraTramo.setVisibility(activo && RadarService.enTramo ? View.VISIBLE : View.GONE);
         String[] t = titular(velocimetro.modo);
         etiquetaHero.setText(t[0]);
         titularHero.setText(t[1]);
@@ -353,6 +360,63 @@ public class MainActivity extends Pantalla {
         }
     }
 
+    /**
+     * Barra de progreso del radar de tramo: pista oscura, parte recorrida en turquesa
+     * (o en rojo si tu media supera el límite), marca blanca donde estás y metros debajo.
+     */
+    static class BarraTramo extends View {
+        private final android.graphics.Paint p = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        private final android.graphics.RectF r = new android.graphics.RectF();
+        private float mostrado = 0;
+
+        BarraTramo(android.content.Context c) {
+            super(c);
+        }
+
+        static String km(int m) {
+            if (m < 1000) return (Math.round(m / 10f) * 10) + " m";
+            return String.format(new java.util.Locale("es", "ES"), "%.1f km", m / 1000f);
+        }
+
+        @Override
+        protected void onDraw(android.graphics.Canvas c) {
+            float d = getResources().getDisplayMetrics().density;
+            float w = getWidth(), alto = 14 * d;
+            mostrado += (RadarService.progresoTramo - mostrado) * 0.2f;
+            boolean pasado = RadarService.limiteTramo > 0 && RadarService.mediaTramo > RadarService.limiteTramo;
+
+            // Pista
+            p.setShader(null);
+            p.setColor(HUNDIDO);
+            r.set(0, 0, w, alto);
+            c.drawRoundRect(r, alto / 2, alto / 2, p);
+            // Parte recorrida
+            float x = Math.max(alto, w * mostrado);
+            p.setShader(new android.graphics.LinearGradient(0, 0, x, 0,
+                    pasado ? 0xFF7A1F27 : TURQUESA_OSCURO, pasado ? ROJO : VERDE,
+                    android.graphics.Shader.TileMode.CLAMP));
+            r.set(0, 0, x, alto);
+            c.drawRoundRect(r, alto / 2, alto / 2, p);
+            p.setShader(null);
+            // Marca de «estás aquí»
+            p.setColor(0xFFFFFFFF);
+            r.set(x + 3 * d, -3 * d, x + 7 * d, alto + 3 * d);
+            if (r.right > w) r.offset(w - r.right, 0);
+            c.drawRoundRect(r, 2 * d, 2 * d, p);
+
+            // Textos debajo
+            p.setTextSize(12 * d);
+            p.setColor(SUB);
+            p.setTextAlign(android.graphics.Paint.Align.LEFT);
+            c.drawText("Recorrido " + km(RadarService.recorridoTramo), 0, alto + 22 * d, p);
+            p.setTextAlign(android.graphics.Paint.Align.RIGHT);
+            p.setColor(pasado ? ROJO : TEXTO);
+            c.drawText("Quedan " + km(RadarService.restanteTramo), w, alto + 22 * d, p);
+
+            if (getVisibility() == VISIBLE) postInvalidateOnAnimation();
+        }
+    }
+
     /** Vibración corta para confirmar que se ha pulsado el botón sin mirar la pantalla. */
     private void vibrarCorto() {
         try {
@@ -366,11 +430,16 @@ public class MainActivity extends Pantalla {
     private String[] titular(int modo) {
         if (!RadarService.activo) return new String[]{"Avisos apagados", "El loro está\ndescansando"};
         if (!RadarService.hayGps) return new String[]{"Esperando", "Buscando\nGPS…"};
+        if (RadarService.enTramo) modo = VelocimetroView.MODO_TRAMOS;
         switch (modo) {
             case VelocimetroView.MODO_TRAMOS:
                 if (!RadarService.enTramo) return new String[]{"Radar de tramo", "Fuera de\ntramo"};
                 int m = RadarService.mediaTramo;
-                return new String[]{"Radar de tramo · tu media", (m > 0 ? m : "--") + " km/h\nde media"};
+                int lt = RadarService.limiteTramo;
+                boolean pasado = lt > 0 && m > lt;
+                return new String[]{pasado ? "Radar de tramo · ¡vas " + (m - lt) + " por encima!"
+                        : "Radar de tramo · límite " + (lt > 0 ? lt : "--"),
+                        (m > 0 ? m : "--") + " km/h\nde media"};
             case VelocimetroView.MODO_TRAFICO:
                 String inc = RadarService.incidenciaTexto;
                 return new String[]{"Tráfico (DGT)", inc != null ? partir(inc) : "Sin\nincidencias"};

@@ -52,6 +52,8 @@ public class RadarService extends Service implements LocationListener {
     public static volatile boolean enTramo = false;
     public static volatile int mediaTramo = 0;      // km/h
     public static volatile int limiteTramo = 0;
+    public static volatile float progresoTramo = 0;   // 0 = inicio, 1 = final
+    public static volatile int recorridoTramo = 0, restanteTramo = 0; // metros
     // Límite de la carretera por la que vas (OpenStreetMap)
     public static volatile int limiteVia = 0;
     // Próximo peaje delante (para la pestaña «Peajes» de la pantalla principal)
@@ -351,6 +353,9 @@ public class RadarService extends Service implements LocationListener {
         Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), finLat, finLon, res);
         double dFin = res[0];
         minFin = Math.min(minFin, dFin);
+        recorridoTramo = (int) recorrido;
+        restanteTramo = (int) dFin;
+        progresoTramo = (float) Math.max(0, Math.min(1, recorrido / Math.max(1, recorrido + dFin)));
 
         if (!avisadoMedia && dFin <= 200) {
             avisadoMedia = true;
@@ -374,6 +379,7 @@ public class RadarService extends Service implements LocationListener {
             tramo = null;
             enTramo = false;
             limiteTramo = 0;
+            progresoTramo = 0;
         }
     }
 
