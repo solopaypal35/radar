@@ -1,0 +1,57 @@
+name: Crear APK
+
+on:
+  push:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Incluir radares de España (OpenStreetMap)
+        continue-on-error: true
+        run: |
+          mkdir -p app/src/main/assets
+          Q='[out:json][timeout:180];area["ISO3166-1"="ES"][admin_level=2]->.es;node["highway"="speed_camera"](area.es);out body;'
+          for URL in https://overpass-api.de/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+            if curl -sf --max-time 240 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/radares.json \
+               && grep -q '"lat"' app/src/main/assets/radares.json; then
+              echo "Radares incluidos: $(grep -o '"lat"' app/src/main/assets/radares.json | wc -l)"
+              exit 0
+            fi
+          done
+          rm -f app/src/main/assets/radares.json
+          echo "No se pudieron incluir; la app los descargará con el botón."
+
+      - name: Compilar APK
+        run: gradle assembleDebug --no-daemon
+
+      - name: Preparar APK
+        run: cp app/build/outputs/apk/debug/app-debug.apk AvisaRadar.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: AvisaRadar
+          path: AvisaRadar.apk
+
+      - name: Publicar descarga directa
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete ultima --yes --cleanup-tag || true
+          sleep 5
+          gh release create ultima AvisaRadar.apk --title "AvisaRadar (última versión)" --notes "Descarga AvisaRadar.apk e instálala en el móvil."

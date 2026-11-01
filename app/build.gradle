@@ -1,0 +1,41 @@
+plugins {
+    id 'com.android.application'
+}
+
+android {
+    namespace 'com.gabriel.avisaradar'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.gabriel.avisaradar'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+    }
+
+    signingConfigs {
+        fija {
+            storeFile file('avisaradar.jks')
+            storePassword 'avisaradar'
+            keyAlias 'avisaradar'
+            keyPassword 'avisaradar'
+        }
+    }
+
+    buildTypes {
+        debug {
+            signingConfig signingConfigs.fija
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    lint {
+        abortOnError false
+        checkReleaseBuilds false
+    }
+}
