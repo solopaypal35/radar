@@ -48,7 +48,8 @@ public class MainActivity extends Activity {
     static final int DIAS_ACTUALIZAR = 30;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextView botonActivar, botonMapa, aparcTexto, tipoAviso;
+    private TextView botonActivar, botonMapa, aparcTexto;
+    private final TextView[] chipsTipo = new TextView[3];
     private double aparcLatMostrada = Double.NaN;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
@@ -194,38 +195,47 @@ public class MainActivity extends Activity {
         // Opciones
         LinearLayout opciones = tarjeta();
         opciones.addView(texto("Opciones", 16, TEXTO, true));
-        Switch interMapa = interruptor("Usar mapa", "Mapa ligero con radares e incidencias",
-                Ajustes.usarMapa(this));
+        Switch interMapa = interruptor("Mapa", Ajustes.usarMapa(this));
         interMapa.setOnCheckedChangeListener((b, activado) -> {
             Ajustes.setUsarMapa(this, activado);
             refrescar();
         });
         opciones.addView(interMapa);
-        Switch interTrafico = interruptor("Avisos de tráfico (DGT)",
-                "Accidentes, retenciones, obstáculos y cortes", Ajustes.avisosTrafico(this));
+        Switch interTrafico = interruptor("Avisos de tráfico", Ajustes.avisosTrafico(this));
         interTrafico.setOnCheckedChangeListener((b, activado) -> {
             Ajustes.setAvisosTrafico(this, activado);
             reiniciarSiActivo();
         });
         opciones.addView(interTrafico);
 
-        tipoAviso = texto("", 14, TEXTO, false);
-        tipoAviso.setPadding(0, dp(14), 0, dp(6));
-        pulsable(tipoAviso, v -> {
-            int t = (Ajustes.tipoAviso(this) + 1) % 3;
-            Ajustes.setTipoAviso(this, t);
-            pintarTipoAviso();
-        });
+        // Tipo de aviso: tres botones, el elegido en verde
+        LinearLayout filaTipo = new LinearLayout(this);
+        filaTipo.setGravity(Gravity.CENTER_VERTICAL);
+        filaTipo.setPadding(0, dp(12), 0, dp(4));
+        filaTipo.addView(texto("Aviso", 14, TEXTO, false),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        String[] nombres = {"Voz", "Pitido", "Vibrar"};
+        for (int i = 0; i < 3; i++) {
+            final int tipo = i;
+            TextView chip = botonPequeno(nombres[i]);
+            chip.setTextSize(13);
+            pulsable(chip, v -> {
+                Ajustes.setTipoAviso(this, tipo);
+                pintarTipoAviso();
+            });
+            chipsTipo[i] = chip;
+            LinearLayout.LayoutParams lpChip = new LinearLayout.LayoutParams(dp(68), dp(36));
+            lpChip.leftMargin = dp(6);
+            filaTipo.addView(chip, lpChip);
+        }
         pintarTipoAviso();
-        opciones.addView(tipoAviso);
+        opciones.addView(filaTipo);
 
-        Switch interSolo = interruptor("Avisar solo si me paso",
-                "Radares y tramos solo suenan si vas por encima del límite", Ajustes.soloSiMePaso(this));
+        Switch interSolo = interruptor("Solo si me paso", Ajustes.soloSiMePaso(this));
         interSolo.setOnCheckedChangeListener((b, activado) -> Ajustes.setSoloSiMePaso(this, activado));
         opciones.addView(interSolo);
 
-        Switch interBurbuja = interruptor("Burbuja flotante",
-                "Velocidad, límite y radar encima de Maps o Waze", Ajustes.burbuja(this));
+        Switch interBurbuja = interruptor("Burbuja flotante", Ajustes.burbuja(this));
         interBurbuja.setOnCheckedChangeListener((b, activado) -> {
             Ajustes.setBurbuja(this, activado);
             if (activado && !Burbuja.tienePermiso(this)) {
@@ -237,8 +247,7 @@ public class MainActivity extends Activity {
         });
         opciones.addView(interBurbuja);
 
-        Switch interAparcar = interruptor("Guardar aparcamiento automático",
-                "Al parar los avisos o desconectarse el Bluetooth del coche", Ajustes.aparcarAuto(this));
+        Switch interAparcar = interruptor("Aparcamiento automático", Ajustes.aparcarAuto(this));
         interAparcar.setOnCheckedChangeListener((b, activado) -> {
             Ajustes.setAparcarAuto(this, activado);
             if (activado && Build.VERSION.SDK_INT >= 31
@@ -250,11 +259,8 @@ public class MainActivity extends Activity {
         opciones.addView(interAparcar);
         col.addView(opciones, margenArriba(12));
 
-        TextView ayuda = texto("Activa los avisos y abre Google Maps o Waze: AvisaRadar seguirá "
-                + "avisando en segundo plano, también con la pantalla apagada. Para pararla, usa "
-                + "«Parar» en la notificación.\n\nDatos de radares: © colaboradores de "
-                + "OpenStreetMap (ODbL). Incidencias: DGT, Servei Català de Trànsit y "
-                + "Dirección de Tráfico del Gobierno Vasco.", 12, SUB, false);
+        TextView ayuda = texto("Funciona en segundo plano, con Maps o Waze delante.\n\n"
+                + "Radares: © OpenStreetMap. Tráfico: DGT, SCT y Gobierno Vasco.", 12, SUB, false);
         ayuda.setPadding(dp(4), dp(18), dp(4), 0);
         col.addView(ayuda);
 
@@ -506,8 +512,12 @@ public class MainActivity extends Activity {
     }
 
     private void pintarTipoAviso() {
-        tipoAviso.setText("Tipo de aviso:  " + Ajustes.nombreTipoAviso(Ajustes.tipoAviso(this))
-                + "   (toca para cambiar)");
+        int elegido = Ajustes.tipoAviso(this);
+        for (int i = 0; i < 3; i++) {
+            boolean si = i == elegido;
+            chipsTipo[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
+            chipsTipo[i].setTextColor(si ? FONDO : TEXTO);
+        }
     }
 
     // ---------- Dónde he aparcado ----------
@@ -646,9 +656,9 @@ public class MainActivity extends Activity {
         return lp;
     }
 
-    private Switch interruptor(String titulo, String sub, boolean activado) {
+    private Switch interruptor(String titulo, boolean activado) {
         Switch s = new Switch(this);
-        s.setText(titulo + "\n" + sub);
+        s.setText(titulo);
         s.setTextColor(TEXTO);
         s.setTextSize(14);
         s.setChecked(activado);
