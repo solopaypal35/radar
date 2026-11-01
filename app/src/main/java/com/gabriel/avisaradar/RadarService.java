@@ -173,9 +173,10 @@ public class RadarService extends Service implements LocationListener {
             activo = true;
             if (Ajustes.avisosTrafico(this)) iniciarTrafico();
             iniciarLimiteVia();
+            // La burbuja solo aparece cuando la app está minimizada (Maps, Waze, escritorio…)
             if (Ajustes.burbuja(this) && Burbuja.tienePermiso(this)) {
                 burbuja = new Burbuja(this);
-                burbuja.mostrar();
+                manejador.post(vigilarBurbuja);
             }
             try {
                 IntentFilter f = new IntentFilter(BluetoothDevice.ACTION_ACL_DISCONNECTED);
@@ -194,6 +195,7 @@ public class RadarService extends Service implements LocationListener {
     @Override
     public void onDestroy() {
         guardarAparcamientoAuto();
+        manejador.removeCallbacks(vigilarBurbuja);
         if (burbuja != null) burbuja.ocultar();
         if (bluetoothRegistrado) {
             try {
@@ -589,6 +591,18 @@ public class RadarService extends Service implements LocationListener {
                 .build();
         getSystemService(NotificationManager.class).notify(id, n);
     }
+
+    /** Cada medio segundo: muestra la burbuja si la app está minimizada y la oculta si está delante. */
+    private final Runnable vigilarBurbuja = new Runnable() {
+        @Override
+        public void run() {
+            if (burbuja == null) return;
+            boolean appDelante = Pantalla.visibles > 0;
+            if (appDelante || burbuja.cerrada) burbuja.ocultar();
+            else burbuja.mostrar();
+            manejador.postDelayed(this, 500);
+        }
+    };
 
     // ---------- Foco de audio: la música baja de volumen mientras se avisa ----------
 

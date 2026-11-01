@@ -35,6 +35,8 @@ public class Burbuja {
     private LinearLayout panel;
     private WindowManager.LayoutParams lp, lpPanel;
     private boolean visible = false, panelVisible = false;
+    /** El usuario la ha cerrado con la ✕. */
+    public volatile boolean cerrada = false;
 
     private final Runnable tic = new Runnable() {
         @Override
@@ -139,7 +141,10 @@ public class Burbuja {
             i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_REORDER_TO_FRONT);
             ctx.startActivity(i);
         }));
-        panel.addView(boton(R.drawable.ic_cerrar, Pantalla.ROJO, false, v -> ocultar()));
+        panel.addView(boton(R.drawable.ic_cerrar, Pantalla.ROJO, false, v -> {
+            cerrada = true; // no vuelve a salir hasta que se vuelvan a activar los avisos
+            ocultar();
+        }));
         lpPanel = parametros();
 
         try {

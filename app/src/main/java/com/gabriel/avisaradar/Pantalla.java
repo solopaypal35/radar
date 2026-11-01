@@ -35,6 +35,21 @@ public class Pantalla extends Activity {
 
     protected final Handler handler = new Handler(Looper.getMainLooper());
 
+    /** Cuántas pantallas de Al Loro se están viendo ahora (0 = la app está minimizada). */
+    public static volatile int visibles = 0;
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        visibles++;
+    }
+
+    @Override
+    protected void onStop() {
+        super.onStop();
+        visibles = Math.max(0, visibles - 1);
+    }
+
     protected void colorearBarras() {
         getWindow().setStatusBarColor(FONDO);
         getWindow().setNavigationBarColor(FONDO);
