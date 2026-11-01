@@ -49,7 +49,7 @@ public class RadarService extends Service implements LocationListener {
     private boolean ttsListo = false;
     private ToneGenerator tono;
     private PowerManager.WakeLock wakeLock;
-    /** Distancias de aviso. A 500 y 100 m siempre; a 200 y 50 m solo si vas por encima del límite. */
+    /** Distancias de aviso. A 500, 100 y 50 m siempre; a 200 m solo si vas por encima del límite. */
     static final int[] UMBRALES = {500, 200, 100, 50};
     /** Para cada radar cercano, cuántos umbrales se han pasado ya. */
     private final Map<RadarDB.Radar, Integer> nivel = new IdentityHashMap<>();
@@ -252,8 +252,8 @@ public class RadarService extends Service implements LocationListener {
                 if (antes == 0) {
                     // Primer aviso de este radar (normalmente a 500 m)
                     avisar(cercano, umbral == 500 ? 500 : redondear(dCercano), rapido);
-                } else if (rapido || umbral == 100) {
-                    // 100 m: siempre. 200 y 50 m: solo si todavía vas por encima del límite
+                } else if (rapido || umbral == 100 || umbral == 50) {
+                    // 100 y 50 m: siempre. 200 m: solo si todavía vas por encima del límite
                     avisar(cercano, umbral, rapido);
                 }
             }
