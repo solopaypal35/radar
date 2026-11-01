@@ -70,6 +70,7 @@ public class RadarService extends Service implements LocationListener {
     private PowerManager.WakeLock wakeLock;
     /** Distancias de aviso (las elige el usuario). 1ª, 3ª y 4ª siempre; 2ª solo si vas por encima del límite. */
     private int[] umbrales = {500, 200, 100, 50};
+    private final int[] modosDistancia = new int[4];
     /** Para cada radar cercano, cuántos umbrales se han pasado ya. */
     private final Map<RadarDB.Radar, Integer> nivel = new IdentityHashMap<>();
     private long ultimaNotif = 0;
@@ -112,6 +113,7 @@ public class RadarService extends Service implements LocationListener {
         semaforos = PuntosDB.semaforos(this);
         peajes = PuntosDB.peajes(this);
         umbrales = Ajustes.distancias(this);
+        for (int i = 0; i < 4; i++) modosDistancia[i] = Ajustes.modoDistancia(this, i);
         tts = new TextToSpeech(this, estado -> {
             if (estado == TextToSpeech.SUCCESS) {
                 tts.setLanguage(new Locale("es", "ES"));
@@ -249,7 +251,7 @@ public class RadarService extends Service implements LocationListener {
         if (ahoraNivel > antes) {
             nivelTrafico.put(cercana, ahoraNivel);
             String frase = cercana.tipo + " a " + distanciaHablada(dCercana);
-            emitir(frase);
+            emitir(frase, "trafico");
             Notification n = new Notification.Builder(this, CANAL_AVISO)
                     .setSmallIcon(R.drawable.ic_notif)
                     .setColor(0xFFFFB020)
@@ -335,14 +337,14 @@ public class RadarService extends Service implements LocationListener {
                     frase += ". Vas " + (mediaTramo - tramo.limite)
                             + " por encima del límite de " + tramo.limite;
                 }
-                emitir(frase);
+                emitir(frase, "tramo");
                 notificar("Radar de tramo", frase, pasado ? 0xFFFF4D5E : 0xFFFFB020, ID_AVISO + 2);
             }
         }
         boolean llegado = dFin < 40 || (dFin > minFin + 80 && minFin < 250);
         boolean perdido = dFin > minFin + 1500 || segundos > 2 * 60 * 60;
         if (llegado || perdido) {
-            if (llegado && !Ajustes.soloSiMePaso(this)) emitir("Fin del tramo");
+            if (llegado && !Ajustes.soloSiMePaso(this)) emitir("Fin del tramo", "tramo");
             tramoTerminado = tramo;
             finTramoHora = System.currentTimeMillis();
             tramo = null;
@@ -369,7 +371,7 @@ public class RadarService extends Service implements LocationListener {
         limiteTramo = t.limite;
         enTramo = true;
         if (!Ajustes.soloSiMePaso(this)) {
-            emitir("Inicio de radar de tramo" + (t.limite > 0 ? ", límite " + t.limite : ""));
+            emitir("Inicio de radar de tramo" + (t.limite > 0 ? ", límite " + t.limite : ""), "tramo");
         }
         return true;
     }
@@ -395,7 +397,7 @@ public class RadarService extends Service implements LocationListener {
             } else {
                 frase = "Semáforo con cámara a " + redondear(res[0]) + " metros";
             }
-            emitir(frase);
+            emitir(frase, esPeaje ? "peaje" : "semaforo");
             notificar(esPeaje ? "Peaje" : "Semáforo con cámara", frase, 0xFFB57CFF, ID_AVISO + 4);
             return; // un aviso cada vez
         }
@@ -472,14 +474,14 @@ public class RadarService extends Service implements LocationListener {
                 int indice = ahoraNivel - 1;
                 int umbral = umbrales[indice];
                 boolean rapido = limRadar > 0 && kmh > limRadar + 3;
+                int modo = modosDistancia[indice];
+                int metros = antes == 0 && indice > 0 ? redondear(dCercano) : umbral;
                 if (Ajustes.soloSiMePaso(this) && !rapido) {
                     // Opción «solo si me paso»: no se avisa
-                } else if (antes == 0) {
-                    // Primer aviso de este radar (normalmente a 500 m)
-                    avisar(cercano, indice == 0 ? umbral : redondear(dCercano), limRadar, rapido);
-                } else if (rapido || indice != 1) {
-                    // 1ª, 3ª y 4ª distancia: siempre. 2ª: solo si todavía vas por encima del límite
-                    avisar(cercano, umbral, limRadar, rapido);
+                } else if (modo == Ajustes.DIST_SILENCIO) {
+                    avisar(cercano, metros, limRadar, rapido, false); // solo notificación
+                } else if (modo == Ajustes.DIST_VOZ || rapido) {
+                    avisar(cercano, metros, limRadar, rapido, true);
                 }
             }
         }
@@ -499,16 +501,17 @@ public class RadarService extends Service implements LocationListener {
         }
     }
 
-    private void avisar(RadarDB.Radar r, int metros, int lim, boolean exceso) {
+    private void avisar(RadarDB.Radar r, int metros, int lim, boolean exceso, boolean conSonido) {
         String frase = (r.propio ? "Aviso a " : "Radar a ") + metros + " metros";
         if (lim > 0) frase += ", límite " + lim;
         if (exceso) frase += ". Reduce la velocidad";
-        emitir(frase);
+        if (conSonido) emitir(frase, "radar");
         notificar(r.propio ? "Aviso" : "Radar", frase, 0xFFFF4D5E, ID_AVISO);
     }
 
     /** Avisa según el tipo elegido: voz, solo pitido o solo vibración. */
-    private void emitir(String frase) {
+    private void emitir(String frase, String tipo) {
+        if (!Ajustes.sonido(this, tipo)) return; // ese tipo está en silencio: solo notificación
         switch (Ajustes.tipoAviso(this)) {
             case Ajustes.AVISO_PITIDO:
                 pitar();

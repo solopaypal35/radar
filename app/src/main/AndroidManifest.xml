@@ -46,6 +46,10 @@
         </activity>
 
         <activity
+            android:name=".AjustesActivity"
+            android:exported="false" />
+
+        <activity
             android:name=".MapaActivity"
             android:exported="false" />
 

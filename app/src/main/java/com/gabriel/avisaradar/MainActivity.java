@@ -32,29 +32,16 @@ import android.widget.Toast;
 import java.util.ArrayList;
 import java.util.List;
 
-public class MainActivity extends Activity {
+public class MainActivity extends Pantalla {
 
-    static final int FONDO = 0xFF0B1220;
-    static final int TARJETA = 0xFF16213A;
-    static final int BORDE = 0xFF24324F;
-    static final int TEXTO = 0xFFE8EEF8;
-    static final int SUB = 0xFF8A9BB8;
-    static final int VERDE = 0xFF2EE6A6;
-    static final int AMBAR = 0xFFFFB020;
-    static final int AMBAR_FONDO = 0xFF3A2A08;
-    static final int ROJO = 0xFFFF4D5E;
 
     /** A partir de cuántos días se avisa de que hay que actualizar los radares. */
     static final int DIAS_ACTUALIZAR = 30;
 
-    private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView botonActivar, botonMapa, aparcTexto;
-    private final TextView[] chipsTipo = new TextView[3];
-    private final TextView[] chipsComb = new TextView[Gasolineras.NOMBRES.length];
     private double aparcLatMostrada = Double.NaN;
     private ImageView fotoAparc;
     private long fotoMostrada = -1;
-    private TextView distanciasTexto;
     static final int PEDIR_FOTO = 20;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
@@ -72,8 +59,7 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        getWindow().setStatusBarColor(FONDO);
-        getWindow().setNavigationBarColor(FONDO);
+        colorearBarras();
 
         LinearLayout col = new LinearLayout(this);
         col.setOrientation(LinearLayout.VERTICAL);
@@ -91,8 +77,14 @@ public class MainActivity extends Activity {
         titulos.setPadding(dp(12), 0, 0, 0);
         TextView titulo = texto("AvisaRadar", 24, TEXTO, true);
         titulos.addView(titulo);
-        titulos.addView(texto("Avisos de radares fijos", 13, SUB, false));
-        cabecera.addView(titulos);
+        titulos.addView(texto("Avisos de radares y tráfico", 13, SUB, false));
+        cabecera.addView(titulos, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        TextView ajustes = texto("⚙", 22, TEXTO, false);
+        ajustes.setGravity(Gravity.CENTER);
+        ajustes.setBackground(redondo(TARJETA, BORDE, 24));
+        ajustes.setContentDescription("Ajustes");
+        pulsable(ajustes, v -> startActivity(new Intent(this, AjustesActivity.class)));
+        cabecera.addView(ajustes, new LinearLayout.LayoutParams(dp(48), dp(48)));
         col.addView(cabecera);
 
         // Radar animado
@@ -211,112 +203,8 @@ public class MainActivity extends Activity {
         musica.addView(filaMusica);
         col.addView(musica, margenArriba(12));
 
-        // Opciones
-        LinearLayout opciones = tarjeta();
-        opciones.addView(texto("Opciones", 16, TEXTO, true));
-        Switch interMapa = interruptor("Mapa", Ajustes.usarMapa(this));
-        interMapa.setOnCheckedChangeListener((b, activado) -> {
-            Ajustes.setUsarMapa(this, activado);
-            refrescar();
-        });
-        opciones.addView(interMapa);
-        Switch interTrafico = interruptor("Avisos de tráfico", Ajustes.avisosTrafico(this));
-        interTrafico.setOnCheckedChangeListener((b, activado) -> {
-            Ajustes.setAvisosTrafico(this, activado);
-            reiniciarSiActivo();
-        });
-        opciones.addView(interTrafico);
-
-        // Tipo de aviso: tres botones, el elegido en verde
-        LinearLayout filaTipo = new LinearLayout(this);
-        filaTipo.setGravity(Gravity.CENTER_VERTICAL);
-        filaTipo.setPadding(0, dp(12), 0, dp(4));
-        filaTipo.addView(texto("Aviso", 14, TEXTO, false),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        String[] nombres = {"Voz", "Pitido", "Vibrar"};
-        for (int i = 0; i < 3; i++) {
-            final int tipo = i;
-            TextView chip = botonPequeno(nombres[i]);
-            chip.setTextSize(13);
-            pulsable(chip, v -> {
-                Ajustes.setTipoAviso(this, tipo);
-                pintarTipoAviso();
-            });
-            chipsTipo[i] = chip;
-            LinearLayout.LayoutParams lpChip = new LinearLayout.LayoutParams(dp(68), dp(36));
-            lpChip.leftMargin = dp(6);
-            filaTipo.addView(chip, lpChip);
-        }
-        pintarTipoAviso();
-        opciones.addView(filaTipo);
-
-        // Combustible que usas (para los precios de las gasolineras del mapa)
-        LinearLayout filaComb = new LinearLayout(this);
-        filaComb.setGravity(Gravity.CENTER_VERTICAL);
-        filaComb.setPadding(0, dp(10), 0, dp(4));
-        filaComb.addView(texto("Combustible", 14, TEXTO, false),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        for (int i = 0; i < Gasolineras.NOMBRES.length; i++) {
-            final int tipo = i;
-            TextView chip = botonPequeno(Gasolineras.NOMBRES[i]);
-            chip.setTextSize(12);
-            pulsable(chip, v -> {
-                Ajustes.setCombustible(this, tipo);
-                pintarCombustible();
-            });
-            chipsComb[i] = chip;
-            LinearLayout.LayoutParams lpChip = new LinearLayout.LayoutParams(dp(56), dp(36));
-            lpChip.leftMargin = dp(4);
-            filaComb.addView(chip, lpChip);
-        }
-        pintarCombustible();
-        opciones.addView(filaComb);
-
-        Switch interGas = interruptor("Gasolineras en el mapa", Ajustes.gasolineras(this));
-        interGas.setOnCheckedChangeListener((b, activado) -> Ajustes.setGasolineras(this, activado));
-        opciones.addView(interGas);
-
-        LinearLayout filaDist = new LinearLayout(this);
-        filaDist.setGravity(Gravity.CENTER_VERTICAL);
-        filaDist.setPadding(0, dp(12), 0, dp(4));
-        filaDist.addView(texto("Distancias radar", 14, TEXTO, false),
-                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        distanciasTexto = texto("", 14, VERDE, true);
-        pulsable(distanciasTexto, v -> editarDistancias());
-        filaDist.addView(distanciasTexto);
-        pintarDistancias();
-        opciones.addView(filaDist);
-
-        Switch interSolo = interruptor("Solo si me paso", Ajustes.soloSiMePaso(this));
-        interSolo.setOnCheckedChangeListener((b, activado) -> Ajustes.setSoloSiMePaso(this, activado));
-        opciones.addView(interSolo);
-
-        Switch interBurbuja = interruptor("Burbuja flotante", Ajustes.burbuja(this));
-        interBurbuja.setOnCheckedChangeListener((b, activado) -> {
-            Ajustes.setBurbuja(this, activado);
-            if (activado && !Burbuja.tienePermiso(this)) {
-                toast("Activa «Mostrar sobre otras apps» para AvisaRadar y vuelve");
-                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:" + getPackageName())));
-            }
-            reiniciarSiActivo();
-        });
-        opciones.addView(interBurbuja);
-
-        Switch interAparcar = interruptor("Aparcamiento automático", Ajustes.aparcarAuto(this));
-        interAparcar.setOnCheckedChangeListener((b, activado) -> {
-            Ajustes.setAparcarAuto(this, activado);
-            if (activado && Build.VERSION.SDK_INT >= 31
-                    && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
-                    != PackageManager.PERMISSION_GRANTED) {
-                requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 3);
-            }
-        });
-        opciones.addView(interAparcar);
-        col.addView(opciones, margenArriba(12));
-
-        TextView ayuda = texto("Funciona en segundo plano, con Maps o Waze delante.\n\n"
-                + "Radares: © OpenStreetMap. Tráfico: DGT, SCT y Gobierno Vasco.", 12, SUB, false);
+        TextView ayuda = texto("Activa los avisos y abre Maps o Waze: AvisaRadar sigue avisando "
+                + "en segundo plano.", 12, SUB, false);
         ayuda.setPadding(dp(4), dp(18), dp(4), 0);
         col.addView(ayuda);
 
@@ -388,6 +276,8 @@ public class MainActivity extends Activity {
                 radaresSub.setText("Actualizados " + cuando(dias) + extra);
             }
             ponerAvisoRadares(toca);
+            // La tarjeta solo aparece cuando hay que actualizar (si no, está en Ajustes)
+            tarjetaRadares.setVisibility(toca ? View.VISIBLE : View.GONE);
         }
     }
 
@@ -472,16 +362,6 @@ public class MainActivity extends Activity {
         handler.postDelayed(this::refrescar, 500);
     }
 
-    private void reiniciarSiActivo() {
-        if (RadarService.activo) {
-            stopService(new Intent(this, RadarService.class));
-            handler.postDelayed(() -> {
-                startForegroundService(new Intent(this, RadarService.class));
-                refrescar();
-            }, 500);
-        }
-    }
-
     // ---------- Radares ----------
 
     private void actualizar() {
@@ -517,36 +397,6 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private void anadirAqui() {
-        Location l = RadarService.ultima;
-        if (!RadarService.activo || l == null) {
-            toast("Activa los avisos y espera a tener señal GPS");
-            return;
-        }
-        RadarDB.anadirPropio(this, l.getLatitude(), l.getLongitude());
-        toast("Aviso guardado en tu posición");
-        reiniciarSiActivo();
-        refrescarRadares();
-    }
-
-    private void confirmarBorrar() {
-        if (RadarDB.propios(this).isEmpty()) {
-            toast("No tienes avisos propios guardados");
-            return;
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Borrar mis avisos")
-                .setMessage("Se borrarán todos los avisos que has añadido tú. Los radares no se tocan.")
-                .setPositiveButton("Borrar", (d, w) -> {
-                    RadarDB.borrarPropios(this);
-                    toast("Avisos propios borrados");
-                    reiniciarSiActivo();
-                    refrescarRadares();
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
-    }
-
     private void pedirSinOptimizar() {
         try {
             startActivity(new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS,
@@ -557,33 +407,6 @@ public class MainActivity extends Activity {
     }
 
     // ---------- Piezas de la interfaz ----------
-
-    private TextView texto(String s, int sp, int color, boolean negrita) {
-        TextView t = new TextView(this);
-        t.setText(s);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (negrita) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        return t;
-    }
-
-    private void pintarTipoAviso() {
-        int elegido = Ajustes.tipoAviso(this);
-        for (int i = 0; i < 3; i++) {
-            boolean si = i == elegido;
-            chipsTipo[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
-            chipsTipo[i].setTextColor(si ? FONDO : TEXTO);
-        }
-    }
-
-    private void pintarCombustible() {
-        int elegido = Ajustes.combustible(this);
-        for (int i = 0; i < chipsComb.length; i++) {
-            boolean si = i == elegido;
-            chipsComb[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
-            chipsComb[i].setTextColor(si ? FONDO : TEXTO);
-        }
-    }
 
     // ---------- Dónde he aparcado ----------
 
@@ -792,145 +615,4 @@ public class MainActivity extends Activity {
 
     // ---------- Distancias de aviso ----------
 
-    private void pintarDistancias() {
-        int[] d = Ajustes.distancias(this);
-        distanciasTexto.setText(d[0] + " · " + d[1] + " · " + d[2] + " · " + d[3] + " m  ›");
-    }
-
-    private void editarDistancias() {
-        int[] d = Ajustes.distancias(this);
-        String[] etiquetas = {"1er aviso (siempre)", "2º aviso (solo si te pasas)", "3er aviso (siempre)", "4º aviso (siempre)"};
-        LinearLayout caja = new LinearLayout(this);
-        caja.setOrientation(LinearLayout.VERTICAL);
-        caja.setPadding(dp(22), dp(8), dp(22), 0);
-        android.widget.EditText[] campos = new android.widget.EditText[4];
-        for (int i = 0; i < 4; i++) {
-            TextView t = new TextView(this);
-            t.setText(etiquetas[i] + " — metros");
-            t.setPadding(0, dp(8), 0, 0);
-            caja.addView(t);
-            campos[i] = new android.widget.EditText(this);
-            campos[i].setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
-            campos[i].setText(String.valueOf(d[i]));
-            caja.addView(campos[i]);
-        }
-        new AlertDialog.Builder(this)
-                .setTitle("Distancias de aviso")
-                .setView(caja)
-                .setPositiveButton("Guardar", (dlg, w) -> {
-                    int[] nuevas = new int[4];
-                    try {
-                        for (int i = 0; i < 4; i++) nuevas[i] = Integer.parseInt(campos[i].getText().toString().trim());
-                    } catch (NumberFormatException e) {
-                        toast("Escribe solo números");
-                        return;
-                    }
-                    for (int i = 0; i < 4; i++) {
-                        if (nuevas[i] < 20 || nuevas[i] > 2000) {
-                            toast("Cada distancia tiene que estar entre 20 y 2000 metros");
-                            return;
-                        }
-                        if (i > 0 && nuevas[i] >= nuevas[i - 1]) {
-                            toast("Cada aviso tiene que estar más cerca que el anterior");
-                            return;
-                        }
-                    }
-                    Ajustes.setDistancias(this, nuevas);
-                    pintarDistancias();
-                    reiniciarSiActivo();
-                })
-                .setNeutralButton("Por defecto", (dlg, w) -> {
-                    Ajustes.setDistancias(this, new int[]{500, 200, 100, 50});
-                    pintarDistancias();
-                    reiniciarSiActivo();
-                })
-                .setNegativeButton("Cancelar", null)
-                .show();
-    }
-
-    /** Cambia el texto del botón por el icono de la app instalada en el móvil (si lo está). */
-    private void iconoApp(TextView boton, String paquete) {
-        try {
-            android.graphics.drawable.Drawable icono = getPackageManager().getApplicationIcon(paquete);
-            int t = dp(26);
-            icono.setBounds(0, 0, t, t);
-            // Solo el icono, sin texto, centrado en el botón
-            boton.setContentDescription(boton.getText());
-            boton.setText("");
-            boton.setCompoundDrawables(icono, null, null, null);
-            boton.setCompoundDrawablePadding(0);
-            boton.post(() -> boton.setPadding(Math.max(0, (boton.getWidth() - t) / 2), 0, 0, 0));
-        } catch (PackageManager.NameNotFoundException ignored) {
-            // App no instalada: el botón se queda solo con el texto
-        }
-    }
-
-    private LinearLayout.LayoutParams pesoBoton() {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, dp(46), 1f);
-        lp.setMargins(dp(3), 0, dp(3), 0);
-        return lp;
-    }
-
-    private Switch interruptor(String titulo, boolean activado) {
-        Switch s = new Switch(this);
-        s.setText(titulo);
-        s.setTextColor(TEXTO);
-        s.setTextSize(14);
-        s.setChecked(activado);
-        s.setPadding(0, dp(10), 0, dp(4));
-        return s;
-    }
-
-    private LinearLayout tarjeta() {
-        LinearLayout t = new LinearLayout(this);
-        t.setOrientation(LinearLayout.VERTICAL);
-        t.setPadding(dp(16), dp(14), dp(16), dp(14));
-        t.setBackground(redondo(TARJETA, BORDE, 16));
-        return t;
-    }
-
-    private TextView botonPequeno(String s) {
-        TextView b = texto(s, 14, TEXTO, true);
-        b.setGravity(Gravity.CENTER);
-        b.setBackground(redondo(TARJETA, BORDE, 25));
-        return b;
-    }
-
-    private GradientDrawable redondo(int fondo, int borde, int radioDp) {
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(fondo);
-        g.setCornerRadius(dp(radioDp));
-        g.setStroke(dp(1), borde);
-        return g;
-    }
-
-    /** Hace que una vista reaccione al toque encogiéndose un poco. */
-    private void pulsable(View v, View.OnClickListener l) {
-        v.setClickable(true);
-        v.setOnClickListener(l);
-        v.setOnTouchListener((vista, e) -> {
-            if (e.getAction() == MotionEvent.ACTION_DOWN) {
-                vista.animate().scaleX(0.96f).scaleY(0.96f).setDuration(90).start();
-            } else if (e.getAction() == MotionEvent.ACTION_UP
-                    || e.getAction() == MotionEvent.ACTION_CANCEL) {
-                vista.animate().scaleX(1f).scaleY(1f).setDuration(140).start();
-            }
-            return false;
-        });
-    }
-
-    private LinearLayout.LayoutParams margenArriba(int dpArriba) {
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lp.topMargin = dp(dpArriba);
-        return lp;
-    }
-
-    private int dp(int v) {
-        return Math.round(v * getResources().getDisplayMetrics().density);
-    }
-
-    private void toast(String s) {
-        Toast.makeText(this, s, Toast.LENGTH_LONG).show();
-    }
 }

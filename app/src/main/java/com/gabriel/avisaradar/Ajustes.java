@@ -109,6 +109,33 @@ public class Ajustes {
         prefs(c).edit().putString("distancias", d[0] + "," + d[1] + "," + d[2] + "," + d[3]).apply();
     }
 
+    /** Qué hace cada distancia de aviso: con voz, solo si te pasas o en silencio (solo notificación). */
+    public static final int DIST_VOZ = 0, DIST_SI_ME_PASO = 1, DIST_SILENCIO = 2;
+
+    public static int modoDistancia(Context c, int i) {
+        int[] porDefecto = {DIST_VOZ, DIST_SI_ME_PASO, DIST_VOZ, DIST_VOZ};
+        return prefs(c).getInt("modo_dist_" + i, porDefecto[i]);
+    }
+
+    public static void setModoDistancia(Context c, int i, int modo) {
+        prefs(c).edit().putInt("modo_dist_" + i, modo).apply();
+    }
+
+    // ---------- Sonido de cada tipo de aviso ----------
+
+    public static final String[] TIPOS = {"radar", "tramo", "semaforo", "peaje", "trafico"};
+    public static final String[] NOMBRES_TIPOS = {"Radares fijos", "Radares de tramo",
+            "Semáforos con cámara", "Peajes", "Tráfico (DGT)"};
+
+    /** Si está apagado, ese tipo de aviso solo sale en la notificación, sin sonido. */
+    public static boolean sonido(Context c, String tipo) {
+        return prefs(c).getBoolean("sonido_" + tipo, true);
+    }
+
+    public static void setSonido(Context c, String tipo, boolean v) {
+        prefs(c).edit().putBoolean("sonido_" + tipo, v).apply();
+    }
+
     // ---------- Gasolineras ----------
 
     /** Posición en Gasolineras.IDS del combustible que usas (0 = gasolina 95). */
