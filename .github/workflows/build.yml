@@ -102,3 +102,12 @@ jobs:
           gh release delete ultima --yes --cleanup-tag || true
           sleep 5
           gh release create ultima AvisaRadar.apk --title "AvisaRadar (última versión)" --notes "Descarga AvisaRadar.apk e instálala en el móvil."
+
+      - name: Publicar versión de pruebas (no sustituye a la oficial)
+        if: github.ref != 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release delete pruebas --yes --cleanup-tag || true
+          sleep 5
+          gh release create pruebas AvisaRadar.apk --prerelease --target "$GITHUB_SHA" --title "AvisaRadar (pruebas)" --notes "Versión de pruebas."
