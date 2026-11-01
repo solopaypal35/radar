@@ -148,19 +148,6 @@ public class MainActivity extends Pantalla {
         hero.addView(botonMapa, lpMapa);
         col.addView(hero, margenArriba(16));
 
-        // ---------- Pestañas: qué se ve en la tarjeta principal ----------
-        android.widget.HorizontalScrollView pestanas = new android.widget.HorizontalScrollView(this);
-        pestanas.setHorizontalScrollBarEnabled(false);
-        TextView[] chips = new TextView[4];
-        LinearLayout filaPestanas = filaChips(new String[]{"Radares", "Tramos", "Tráfico", "Peajes"},
-                chips, 92, pos -> {
-                    velocimetro.modo = pos;
-                    refrescar();
-                });
-        marcarChips(chips, 0);
-        pestanas.addView(filaPestanas);
-        col.addView(pestanas, margenArriba(16));
-
         // ---------- Aparcamiento ----------
         col.addView(tituloSeccion("Aparcamiento", "Guardar aquí", v -> guardarAparcamientoManual()));
         LinearLayout aparc = tarjeta();
@@ -190,7 +177,7 @@ public class MainActivity extends Pantalla {
         accionesAparc.setGravity(Gravity.CENTER_VERTICAL);
         accionesAparc.setPadding(0, dp(16), 0, 0);
         accionesAparc.addView(accion(R.drawable.ic_camara, "Foto", v -> hacerFoto()), pesoAccion());
-        accionesAparc.addView(accion(R.drawable.ic_ruta, "Cómo llegar", v -> comoLlegar()), pesoAccion());
+        accionesAparc.addView(accionApp("com.google.android.apps.maps", R.drawable.ic_ruta, "Cómo llegar", v -> comoLlegar()), pesoAccion());
         accionesAparc.addView(accionApp("com.whatsapp", R.drawable.ic_enviar, "WhatsApp", v -> enviarWhatsApp()), pesoAccion());
         aparc.addView(accionesAparc);
         col.addView(aparc);

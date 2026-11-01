@@ -85,12 +85,25 @@ public class MapaActivity extends Activity {
         mapa.getZoomController().setVisibility(CustomZoomButtonsController.Visibility.NEVER);
         mapa.setTilesScaledToDpi(true);
         mapa.getController().setZoom(16.0);
-        mapa.getController().setCenter(new GeoPoint(41.55, 2.10));
+        // Al abrir, el mapa empieza ya centrado en tu última posición conocida
+        Location ultimaPos = RadarService.ultima;
+        if (ultimaPos == null) ultimaPos = ultimaConocida();
+        mapa.getController().setCenter(ultimaPos != null
+                ? new GeoPoint(ultimaPos.getLatitude(), ultimaPos.getLongitude())
+                : new GeoPoint(40.4168, -3.7038));
         raiz.addView(mapa, new FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT, FrameLayout.LayoutParams.MATCH_PARENT));
 
         miPosicion = new MyLocationNewOverlay(new GpsMyLocationProvider(this), mapa);
         miPosicion.setDrawAccuracyEnabled(false);
+        // En cuanto llega la primera posición GPS, se centra en ti
+        miPosicion.runOnFirstFix(() -> runOnUiThread(() -> {
+            if (miPosicion.getMyLocation() != null) {
+                mapa.getController().animateTo(miPosicion.getMyLocation());
+                mapa.getController().setZoom(16.0);
+            }
+            miPosicion.enableFollowLocation();
+        }));
         // Tu posición se dibuja como un coche de carreras que gira según tu dirección
         android.graphics.Bitmap coche = cocheBitmap();
         miPosicion.setDirectionArrow(coche, coche);
