@@ -19,6 +19,7 @@ import android.widget.TextView;
 
 import org.osmdroid.api.IGeoPoint;
 import org.osmdroid.config.Configuration;
+import org.osmdroid.config.IConfigurationProvider;
 import org.osmdroid.tileprovider.tilesource.TileSourceFactory;
 import org.osmdroid.util.GeoPoint;
 import org.osmdroid.views.CustomZoomButtonsController;
@@ -61,7 +62,7 @@ public class MapaActivity extends Activity {
         getWindow().setStatusBarColor(MainActivity.FONDO);
         getWindow().setNavigationBarColor(MainActivity.FONDO);
 
-        Configuration cfg = Configuration.getInstance();
+        IConfigurationProvider cfg = Configuration.getInstance();
         cfg.setUserAgentValue(getPackageName());
         File base = new File(getCacheDir(), "osmdroid");
         cfg.setOsmdroidBasePath(base);
