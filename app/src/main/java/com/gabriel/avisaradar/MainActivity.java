@@ -673,14 +673,18 @@ public class MainActivity extends Activity {
         startActivity(Intent.createChooser(i, "Enviar ubicación"));
     }
 
-    /** Pone delante del texto el icono de la app instalada en el móvil (si lo está). */
+    /** Cambia el texto del botón por el icono de la app instalada en el móvil (si lo está). */
     private void iconoApp(TextView boton, String paquete) {
         try {
             android.graphics.drawable.Drawable icono = getPackageManager().getApplicationIcon(paquete);
-            icono.setBounds(0, 0, dp(22), dp(22));
+            int t = dp(26);
+            icono.setBounds(0, 0, t, t);
+            // Solo el icono, sin texto, centrado en el botón
+            boton.setContentDescription(boton.getText());
+            boton.setText("");
             boton.setCompoundDrawables(icono, null, null, null);
-            boton.setCompoundDrawablePadding(dp(6));
-            boton.setPadding(dp(8), 0, dp(8), 0);
+            boton.setCompoundDrawablePadding(0);
+            boton.post(() -> boton.setPadding(Math.max(0, (boton.getWidth() - t) / 2), 0, 0, 0));
         } catch (PackageManager.NameNotFoundException ignored) {
             // App no instalada: el botón se queda solo con el texto
         }
