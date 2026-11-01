@@ -32,11 +32,12 @@ jobs:
             if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/radares.json \
                && grep -q '"lat"' app/src/main/assets/radares.json; then
               echo "Radares incluidos: $(grep -o '"lat"' app/src/main/assets/radares.json | wc -l)"
+              cp app/src/main/assets/radares.json datos/radares.json
               exit 0
             fi
           done
-          rm -f app/src/main/assets/radares.json
-          echo "No se pudieron incluir; la app los descargará con el botón."
+          cp datos/radares.json app/src/main/assets/radares.json
+          echo "Servidor sin respuesta: se usa la copia guardada ($(grep -o '"lat"' app/src/main/assets/radares.json | wc -l) radares)"
 
       - name: Compilar APK
         run: gradle assembleDebug --no-daemon
