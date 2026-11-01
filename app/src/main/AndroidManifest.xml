@@ -20,6 +20,9 @@
             <action android:name="android.intent.action.TTS_SERVICE" />
         </intent>
         <package android:name="com.spotify.music" />
+        <intent>
+            <action android:name="android.media.action.IMAGE_CAPTURE" />
+        </intent>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
         <package android:name="com.google.android.apps.maps" />
@@ -45,6 +48,12 @@
         <activity
             android:name=".MapaActivity"
             android:exported="false" />
+
+        <provider
+            android:name=".FotoProvider"
+            android:authorities="com.gabriel.avisaradar.foto"
+            android:exported="false"
+            android:grantUriPermissions="true" />
 
         <service
             android:name=".RadarService"

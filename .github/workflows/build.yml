@@ -55,13 +55,33 @@ jobs:
           done
           if [ -f datos/tramos.json ]; then cp datos/tramos.json app/src/main/assets/tramos.json; echo "Se usa la copia guardada de tramos"; else rm -f app/src/main/assets/tramos.json; echo "Sin tramos"; fi
 
+      - name: Incluir semáforos con cámara y peajes (OpenStreetMap)
+        continue-on-error: true
+        run: |
+          mkdir -p app/src/main/assets datos
+          descargar() {
+            NOMBRE=$1; Q=$2; PRUEBA=$3
+            for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+              if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/$NOMBRE.json \
+                 && grep -q "$PRUEBA" app/src/main/assets/$NOMBRE.json; then
+                echo "$NOMBRE incluidos desde $URL"
+                cp app/src/main/assets/$NOMBRE.json datos/$NOMBRE.json
+                return 0
+              fi
+            done
+            if [ -f datos/$NOMBRE.json ]; then cp datos/$NOMBRE.json app/src/main/assets/$NOMBRE.json; echo "$NOMBRE: se usa la copia guardada"; else rm -f app/src/main/assets/$NOMBRE.json; echo "$NOMBRE: sin datos"; fi
+          }
+          descargar semaforos '[out:json][timeout:90];(relation["enforcement"="traffic_signals"](35.1,-9.6,43.9,4.5);relation["enforcement"="traffic_signals"](27.5,-18.3,29.5,-13.3););out body;>;out skel qt;' '"relation"'
+          descargar peajes '[out:json][timeout:90];(node["barrier"="toll_booth"](35.1,-9.6,43.9,4.5);node["barrier"="toll_booth"](27.5,-18.3,29.5,-13.3););out body;' '"lat"'
+
       - name: Guardar copia de los datos en el repositorio
+        if: github.ref == 'refs/heads/main'
         continue-on-error: true
         run: |
           git config user.name "AvisaRadar"
           git config user.email "avisaradar@users.noreply.github.com"
           git add datos
-          git diff --cached --quiet || (git commit -m "Actualiza la copia de radares y tramos [skip ci]" && git push)
+          git diff --cached --quiet || (git commit -m "Actualiza la copia de datos [skip ci]" && git push)
 
       - name: Compilar APK
         run: gradle assembleDebug --no-daemon
@@ -75,6 +95,7 @@ jobs:
           path: AvisaRadar.apk
 
       - name: Publicar descarga directa
+        if: github.ref == 'refs/heads/main'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

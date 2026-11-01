@@ -52,6 +52,10 @@ public class MainActivity extends Activity {
     private final TextView[] chipsTipo = new TextView[3];
     private final TextView[] chipsComb = new TextView[Gasolineras.NOMBRES.length];
     private double aparcLatMostrada = Double.NaN;
+    private ImageView fotoAparc;
+    private long fotoMostrada = -1;
+    private TextView distanciasTexto;
+    static final int PEDIR_FOTO = 20;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
     private ObjectAnimator latidoRadares;
@@ -153,6 +157,16 @@ public class MainActivity extends Activity {
         aparcTexto = texto("", 13, SUB, false);
         aparcTexto.setPadding(0, dp(2), 0, dp(10));
         aparc.addView(aparcTexto);
+        fotoAparc = new ImageView(this);
+        fotoAparc.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        fotoAparc.setBackground(redondo(FONDO, BORDE, 12));
+        fotoAparc.setClipToOutline(true);
+        fotoAparc.setVisibility(View.GONE);
+        fotoAparc.setOnClickListener(v -> verFoto());
+        LinearLayout.LayoutParams lpFoto = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(140));
+        lpFoto.bottomMargin = dp(10);
+        aparc.addView(fotoAparc, lpFoto);
         LinearLayout filaAparc = new LinearLayout(this);
         TextView guardar = botonPequeno("Guardar aquí");
         pulsable(guardar, v -> guardarAparcamientoManual());
@@ -162,7 +176,11 @@ public class MainActivity extends Activity {
         whatsapp.setTextColor(VERDE);
         iconoApp(whatsapp, "com.whatsapp");
         pulsable(whatsapp, v -> enviarWhatsApp());
+        TextView foto = botonPequeno("📷");
+        foto.setTextSize(18);
+        pulsable(foto, v -> hacerFoto());
         filaAparc.addView(guardar, pesoBoton());
+        filaAparc.addView(foto, pesoBoton());
         filaAparc.addView(llegar, pesoBoton());
         filaAparc.addView(whatsapp, pesoBoton());
         aparc.addView(filaAparc);
@@ -257,6 +275,17 @@ public class MainActivity extends Activity {
         Switch interGas = interruptor("Gasolineras en el mapa", Ajustes.gasolineras(this));
         interGas.setOnCheckedChangeListener((b, activado) -> Ajustes.setGasolineras(this, activado));
         opciones.addView(interGas);
+
+        LinearLayout filaDist = new LinearLayout(this);
+        filaDist.setGravity(Gravity.CENTER_VERTICAL);
+        filaDist.setPadding(0, dp(12), 0, dp(4));
+        filaDist.addView(texto("Distancias radar", 14, TEXTO, false),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        distanciasTexto = texto("", 14, VERDE, true);
+        pulsable(distanciasTexto, v -> editarDistancias());
+        filaDist.addView(distanciasTexto);
+        pintarDistancias();
+        opciones.addView(filaDist);
 
         Switch interSolo = interruptor("Solo si me paso", Ajustes.soloSiMePaso(this));
         interSolo.setOnCheckedChangeListener((b, activado) -> Ajustes.setSoloSiMePaso(this, activado));
@@ -559,6 +588,7 @@ public class MainActivity extends Activity {
     // ---------- Dónde he aparcado ----------
 
     private void refrescarAparcamiento() {
+        refrescarFoto();
         if (!Ajustes.hayAparcamiento(this)) {
             aparcTexto.setText("Aún no hay ninguno guardado");
             return;
@@ -659,8 +689,14 @@ public class MainActivity extends Activity {
             return;
         }
         Intent i = new Intent(Intent.ACTION_SEND);
-        i.setType("text/plain");
         i.putExtra(Intent.EXTRA_TEXT, "Mi coche está aparcado aquí: " + enlaceAparcamiento());
+        if (fotoFichero().exists()) {
+            i.setType("image/jpeg");
+            i.putExtra(Intent.EXTRA_STREAM, FotoProvider.URI);
+            i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        } else {
+            i.setType("text/plain");
+        }
         for (String app : new String[]{"com.whatsapp", "com.whatsapp.w4b"}) {
             try {
                 i.setPackage(app);
@@ -671,6 +707,145 @@ public class MainActivity extends Activity {
         }
         i.setPackage(null);
         startActivity(Intent.createChooser(i, "Enviar ubicación"));
+    }
+
+    // ---------- Foto del aparcamiento ----------
+
+    private java.io.File fotoFichero() {
+        return new java.io.File(getFilesDir(), FotoProvider.FICHERO);
+    }
+
+    private void hacerFoto() {
+        if (!Ajustes.hayAparcamiento(this)) {
+            toast("Primero guarda dónde has aparcado");
+            return;
+        }
+        Intent i = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
+        i.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, FotoProvider.URI);
+        i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        i.setClipData(android.content.ClipData.newRawUri("foto", FotoProvider.URI));
+        try {
+            startActivityForResult(i, PEDIR_FOTO);
+        } catch (Exception e) {
+            toast("No se encontró la cámara");
+        }
+    }
+
+    @Override
+    protected void onActivityResult(int code, int resultado, Intent datos) {
+        super.onActivityResult(code, resultado, datos);
+        if (code == PEDIR_FOTO) {
+            if (resultado == RESULT_OK && fotoFichero().length() > 0) toast("Foto guardada con el aparcamiento");
+            fotoMostrada = -1;
+            refrescarFoto();
+        }
+    }
+
+    /** Muestra la miniatura si hay foto (solo vuelve a leerla si ha cambiado). */
+    private void refrescarFoto() {
+        java.io.File f = fotoFichero();
+        long marca = f.exists() && f.length() > 0 ? f.lastModified() : 0;
+        if (marca == fotoMostrada) return;
+        fotoMostrada = marca;
+        if (marca == 0) {
+            fotoAparc.setImageDrawable(null);
+            fotoAparc.setVisibility(View.GONE);
+            return;
+        }
+        android.graphics.BitmapFactory.Options op = new android.graphics.BitmapFactory.Options();
+        op.inSampleSize = 4; // miniatura ligera
+        android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeFile(f.getPath(), op);
+        if (b == null) {
+            fotoAparc.setVisibility(View.GONE);
+            return;
+        }
+        fotoAparc.setImageBitmap(rotarSegunExif(f, b));
+        fotoAparc.setVisibility(View.VISIBLE);
+    }
+
+    private android.graphics.Bitmap rotarSegunExif(java.io.File f, android.graphics.Bitmap b) {
+        try {
+            int o = new android.media.ExifInterface(f.getPath()).getAttributeInt(
+                    android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL);
+            int grados = o == android.media.ExifInterface.ORIENTATION_ROTATE_90 ? 90
+                    : o == android.media.ExifInterface.ORIENTATION_ROTATE_180 ? 180
+                    : o == android.media.ExifInterface.ORIENTATION_ROTATE_270 ? 270 : 0;
+            if (grados == 0) return b;
+            android.graphics.Matrix m = new android.graphics.Matrix();
+            m.postRotate(grados);
+            return android.graphics.Bitmap.createBitmap(b, 0, 0, b.getWidth(), b.getHeight(), m, true);
+        } catch (Exception e) {
+            return b;
+        }
+    }
+
+    private void verFoto() {
+        Intent i = new Intent(Intent.ACTION_VIEW);
+        i.setDataAndType(FotoProvider.URI, "image/jpeg");
+        i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+        try {
+            startActivity(i);
+        } catch (Exception e) {
+            toast("No hay ninguna app para ver fotos");
+        }
+    }
+
+    // ---------- Distancias de aviso ----------
+
+    private void pintarDistancias() {
+        int[] d = Ajustes.distancias(this);
+        distanciasTexto.setText(d[0] + " · " + d[1] + " · " + d[2] + " · " + d[3] + " m  ›");
+    }
+
+    private void editarDistancias() {
+        int[] d = Ajustes.distancias(this);
+        String[] etiquetas = {"1er aviso (siempre)", "2º aviso (solo si te pasas)", "3er aviso (siempre)", "4º aviso (siempre)"};
+        LinearLayout caja = new LinearLayout(this);
+        caja.setOrientation(LinearLayout.VERTICAL);
+        caja.setPadding(dp(22), dp(8), dp(22), 0);
+        android.widget.EditText[] campos = new android.widget.EditText[4];
+        for (int i = 0; i < 4; i++) {
+            TextView t = new TextView(this);
+            t.setText(etiquetas[i] + " — metros");
+            t.setPadding(0, dp(8), 0, 0);
+            caja.addView(t);
+            campos[i] = new android.widget.EditText(this);
+            campos[i].setInputType(android.text.InputType.TYPE_CLASS_NUMBER);
+            campos[i].setText(String.valueOf(d[i]));
+            caja.addView(campos[i]);
+        }
+        new AlertDialog.Builder(this)
+                .setTitle("Distancias de aviso")
+                .setView(caja)
+                .setPositiveButton("Guardar", (dlg, w) -> {
+                    int[] nuevas = new int[4];
+                    try {
+                        for (int i = 0; i < 4; i++) nuevas[i] = Integer.parseInt(campos[i].getText().toString().trim());
+                    } catch (NumberFormatException e) {
+                        toast("Escribe solo números");
+                        return;
+                    }
+                    for (int i = 0; i < 4; i++) {
+                        if (nuevas[i] < 20 || nuevas[i] > 2000) {
+                            toast("Cada distancia tiene que estar entre 20 y 2000 metros");
+                            return;
+                        }
+                        if (i > 0 && nuevas[i] >= nuevas[i - 1]) {
+                            toast("Cada aviso tiene que estar más cerca que el anterior");
+                            return;
+                        }
+                    }
+                    Ajustes.setDistancias(this, nuevas);
+                    pintarDistancias();
+                    reiniciarSiActivo();
+                })
+                .setNeutralButton("Por defecto", (dlg, w) -> {
+                    Ajustes.setDistancias(this, new int[]{500, 200, 100, 50});
+                    pintarDistancias();
+                    reiniciarSiActivo();
+                })
+                .setNegativeButton("Cancelar", null)
+                .show();
     }
 
     /** Cambia el texto del botón por el icono de la app instalada en el móvil (si lo está). */

@@ -129,6 +129,7 @@ public class MapaActivity extends Activity {
         setContentView(raiz);
         pintarBotones();
         cargarRadares();
+        cargarPuntos();
         pintarAparcamiento();
     }
 
@@ -380,6 +381,51 @@ public class MapaActivity extends Activity {
                 })
                 .setNegativeButton("Cerrar", null)
                 .show();
+    }
+
+    /** Semáforos con cámara (morado) y peajes (amarillo). Al tocarlos se ve qué son. */
+    private void cargarPuntos() {
+        new Thread(() -> {
+            List<PuntosDB.Punto> sem = PuntosDB.semaforos(this);
+            List<PuntosDB.Punto> pea = PuntosDB.peajes(this);
+            runOnUiThread(() -> {
+                if (isFinishing()) return;
+                anadirCapa(sem, 0xFFB57CFF, p -> new android.app.AlertDialog.Builder(this)
+                        .setTitle("Semáforo con cámara")
+                        .setMessage("Multa si pasas con el semáforo en rojo.")
+                        .setPositiveButton("Ver en Street View", (d, w) -> abrirStreetView(p.lat, p.lon))
+                        .setNegativeButton("Cerrar", null).show());
+                anadirCapa(pea, 0xFFFFD43B, p -> new android.app.AlertDialog.Builder(this)
+                        .setTitle(p.nombre.isEmpty() ? "Peaje" : "Peaje · " + p.nombre)
+                        .setMessage(p.precio.isEmpty() ? "Precio no disponible" : "Precio: " + p.precio)
+                        .setNegativeButton("Cerrar", null).show());
+            });
+        }).start();
+    }
+
+    interface AlTocar {
+        void punto(PuntosDB.Punto p);
+    }
+
+    private void anadirCapa(List<PuntosDB.Punto> lista, int color, AlTocar alTocar) {
+        if (lista.isEmpty()) return;
+        List<IGeoPoint> puntos = new ArrayList<>();
+        for (PuntosDB.Punto p : lista) puntos.add(new GeoPoint(p.lat, p.lon));
+        Paint relleno = new Paint(Paint.ANTI_ALIAS_FLAG);
+        relleno.setColor(color);
+        relleno.setStyle(Paint.Style.FILL);
+        SimpleFastPointOverlayOptions op = SimpleFastPointOverlayOptions.getDefaultStyle()
+                .setAlgorithm(SimpleFastPointOverlayOptions.RenderingAlgorithm.MAXIMUM_OPTIMIZATION)
+                .setSymbol(SimpleFastPointOverlayOptions.Shape.SQUARE)
+                .setRadius(dp(6))
+                .setIsClickable(true)
+                .setPointStyle(relleno);
+        SimpleFastPointOverlay capa = new SimpleFastPointOverlay(new SimplePointTheme(puntos, false), op);
+        capa.setOnClickListener((l, indice) -> {
+            if (indice != null && indice >= 0 && indice < lista.size()) alTocar.punto(lista.get(indice));
+        });
+        mapa.getOverlays().add(0, capa);
+        mapa.invalidate();
     }
 
     /** Al tocar un radar: su límite y un botón para verlo en Street View. */

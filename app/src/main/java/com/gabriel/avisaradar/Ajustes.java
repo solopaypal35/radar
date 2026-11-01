@@ -89,6 +89,26 @@ public class Ajustes {
         prefs(c).edit().putInt("burbuja_x", x).putInt("burbuja_y", y).apply();
     }
 
+    // ---------- Distancias de aviso de radar ----------
+
+    /** Cuatro distancias en metros, de mayor a menor. 1ª, 3ª y 4ª siempre; 2ª solo si te pasas. */
+    public static int[] distancias(Context c) {
+        String[] partes = prefs(c).getString("distancias", "500,200,100,50").split(",");
+        int[] d = {500, 200, 100, 50};
+        if (partes.length == 4) {
+            try {
+                for (int i = 0; i < 4; i++) d[i] = Integer.parseInt(partes[i].trim());
+            } catch (NumberFormatException e) {
+                return new int[]{500, 200, 100, 50};
+            }
+        }
+        return d;
+    }
+
+    public static void setDistancias(Context c, int[] d) {
+        prefs(c).edit().putString("distancias", d[0] + "," + d[1] + "," + d[2] + "," + d[3]).apply();
+    }
+
     // ---------- Gasolineras ----------
 
     /** Posición en Gasolineras.IDS del combustible que usas (0 = gasolina 95). */
@@ -135,6 +155,8 @@ public class Ajustes {
     }
 
     public static void guardarAparcamiento(Context c, double lat, double lon) {
+        // Un aparcamiento nuevo no conserva la foto del anterior
+        new java.io.File(c.getFilesDir(), FotoProvider.FICHERO).delete();
         prefs(c).edit()
                 .putLong("aparc_lat", Double.doubleToRawLongBits(lat))
                 .putLong("aparc_lon", Double.doubleToRawLongBits(lon))

@@ -68,8 +68,8 @@ public class RadarService extends Service implements LocationListener {
     private boolean ttsListo = false;
     private ToneGenerator tono;
     private PowerManager.WakeLock wakeLock;
-    /** Distancias de aviso. A 500, 100 y 50 m siempre; a 200 m solo si vas por encima del límite. */
-    static final int[] UMBRALES = {500, 200, 100, 50};
+    /** Distancias de aviso (las elige el usuario). 1ª, 3ª y 4ª siempre; 2ª solo si vas por encima del límite. */
+    private int[] umbrales = {500, 200, 100, 50};
     /** Para cada radar cercano, cuántos umbrales se han pasado ya. */
     private final Map<RadarDB.Radar, Integer> nivel = new IdentityHashMap<>();
     private long ultimaNotif = 0;
@@ -88,6 +88,10 @@ public class RadarService extends Service implements LocationListener {
     private boolean avisadoMedia;
 
     private Thread hiloLimite;
+
+    // Semáforos con cámara y peajes: se avisa una vez al acercarte
+    private List<PuntosDB.Punto> semaforos, peajes;
+    private final Map<PuntosDB.Punto, Boolean> puntosAvisados = new IdentityHashMap<>();
     private Burbuja burbuja;
     private double maxVelocidad = 0;
     private final BroadcastReceiver bluetooth = new BroadcastReceiver() {
@@ -105,6 +109,9 @@ public class RadarService extends Service implements LocationListener {
         crearCanales();
         radares = RadarDB.cargar(this);
         tramos = TramosDB.cargar(this);
+        semaforos = PuntosDB.semaforos(this);
+        peajes = PuntosDB.peajes(this);
+        umbrales = Ajustes.distancias(this);
         tts = new TextToSpeech(this, estado -> {
             if (estado == TextToSpeech.SUCCESS) {
                 tts.setLanguage(new Locale("es", "ES"));
@@ -367,6 +374,33 @@ public class RadarService extends Service implements LocationListener {
         return true;
     }
 
+    // ---------- Semáforos con cámara y peajes ----------
+
+    private void revisarPuntos(List<PuntosDB.Punto> lista, int distanciaAviso, Location loc,
+                               boolean hayRumbo, float rumbo, boolean esPeaje) {
+        float[] res = new float[2];
+        for (PuntosDB.Punto p : lista) {
+            Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), p.lat, p.lon, res);
+            if (res[0] > distanciaAviso + 1000) {
+                puntosAvisados.remove(p);
+                continue;
+            }
+            if (res[0] > distanciaAviso || puntosAvisados.containsKey(p)) continue;
+            if (hayRumbo && angulo(rumbo, res[1]) > 40) continue; // solo si lo tienes delante
+            puntosAvisados.put(p, true);
+            String frase;
+            if (esPeaje) {
+                frase = "Peaje a " + distanciaHablada(res[0]);
+                if (!p.precio.isEmpty()) frase += ", precio " + p.precio;
+            } else {
+                frase = "Semáforo con cámara a " + redondear(res[0]) + " metros";
+            }
+            emitir(frase);
+            notificar(esPeaje ? "Peaje" : "Semáforo con cámara", frase, 0xFFB57CFF, ID_AVISO + 4);
+            return; // un aviso cada vez
+        }
+    }
+
     // ---------- Dónde he aparcado ----------
 
     private void guardarAparcamientoAuto() {
@@ -394,7 +428,7 @@ public class RadarService extends Service implements LocationListener {
         for (RadarDB.Radar r : radares) {
             Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), r.lat, r.lon, res);
             double d = res[0];
-            if (d > 1500) {
+            if (d > Math.max(1500, umbrales[0] + 500)) {
                 nivel.remove(r); // al alejarse, se podrá volver a avisar
                 continue;
             }
@@ -412,6 +446,10 @@ public class RadarService extends Service implements LocationListener {
 
         if (hiloTrafico != null) revisarTrafico(loc, kmh, hayRumbo, rumbo);
         if (!tramos.isEmpty()) revisarTramo(loc, kmh, hayRumbo, rumbo);
+        if (kmh >= 15) {
+            revisarPuntos(semaforos, 200, loc, hayRumbo, rumbo, false);
+            revisarPuntos(peajes, 1000, loc, hayRumbo, rumbo, true);
+        }
         maxVelocidad = Math.max(maxVelocidad, kmh);
 
         // Estado para la pantalla
@@ -428,18 +466,19 @@ public class RadarService extends Service implements LocationListener {
         if (cercano != null && kmh >= 15) {
             int antes = nivel.containsKey(cercano) ? nivel.get(cercano) : 0;
             int ahoraNivel = antes;
-            while (ahoraNivel < UMBRALES.length && dCercano <= UMBRALES[ahoraNivel]) ahoraNivel++;
+            while (ahoraNivel < umbrales.length && dCercano <= umbrales[ahoraNivel]) ahoraNivel++;
             if (ahoraNivel > antes) {
                 nivel.put(cercano, ahoraNivel);
-                int umbral = UMBRALES[ahoraNivel - 1];
+                int indice = ahoraNivel - 1;
+                int umbral = umbrales[indice];
                 boolean rapido = limRadar > 0 && kmh > limRadar + 3;
                 if (Ajustes.soloSiMePaso(this) && !rapido) {
                     // Opción «solo si me paso»: no se avisa
                 } else if (antes == 0) {
                     // Primer aviso de este radar (normalmente a 500 m)
-                    avisar(cercano, umbral == 500 ? 500 : redondear(dCercano), limRadar, rapido);
-                } else if (rapido || umbral == 100 || umbral == 50) {
-                    // 100 y 50 m: siempre. 200 m: solo si todavía vas por encima del límite
+                    avisar(cercano, indice == 0 ? umbral : redondear(dCercano), limRadar, rapido);
+                } else if (rapido || indice != 1) {
+                    // 1ª, 3ª y 4ª distancia: siempre. 2ª: solo si todavía vas por encima del límite
                     avisar(cercano, umbral, limRadar, rapido);
                 }
             }
