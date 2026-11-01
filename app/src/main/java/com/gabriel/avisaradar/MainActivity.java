@@ -364,7 +364,7 @@ public class MainActivity extends Pantalla {
 
     /** Texto pequeño de arriba y titular grande de la tarjeta principal, según la pestaña. */
     private String[] titular(int modo) {
-        if (!RadarService.activo) return new String[]{"Avisos parados", "Pulsa para\nempezar"};
+        if (!RadarService.activo) return new String[]{"Avisos apagados", "El loro está\ndescansando"};
         if (!RadarService.hayGps) return new String[]{"Esperando", "Buscando\nGPS…"};
         switch (modo) {
             case VelocimetroView.MODO_TRAMOS:
