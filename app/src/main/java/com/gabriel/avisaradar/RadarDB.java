@@ -35,15 +35,17 @@ public class RadarDB {
     static final String PREFS = "avisaradar";
     static final String CLAVE_PROPIOS = "propios";
 
-    /** Radares fijos de España marcados en OpenStreetMap. */
+    /** Radares fijos marcados en OpenStreetMap: península, Baleares, Canarias, Ceuta y Melilla. */
     static final String CONSULTA =
-            "[out:json][timeout:180];"
-                    + "area[\"ISO3166-1\"=\"ES\"][admin_level=2]->.es;"
-                    + "node[\"highway\"=\"speed_camera\"](area.es);"
-                    + "out body;";
+            "[out:json][timeout:90];("
+                    + "node[\"highway\"=\"speed_camera\"](35.1,-9.6,43.9,4.5);"
+                    + "node[\"highway\"=\"speed_camera\"](27.5,-18.3,29.5,-13.3);"
+                    + ");out body;";
 
     static final String[] SERVIDORES = {
             "https://overpass-api.de/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+            "https://maps.mail.ru/osm/tools/overpass/api/interpreter",
             "https://overpass.kumi.systems/api/interpreter"
     };
 
@@ -163,7 +165,7 @@ public class RadarDB {
     static String pedir(String servidor) throws IOException {
         HttpURLConnection con = (HttpURLConnection) new URL(servidor).openConnection();
         con.setConnectTimeout(20000);
-        con.setReadTimeout(200000);
+        con.setReadTimeout(100000);
         con.setRequestMethod("POST");
         con.setDoOutput(true);
         con.setRequestProperty("Content-Type", "application/x-www-form-urlencoded");
