@@ -152,7 +152,7 @@ public class MainActivity extends Pantalla {
         col.addView(hero, margenArriba(16));
 
         // ---------- Aparcamiento ----------
-        col.addView(tituloSeccion("Aparcamiento", "Guardar aquí", v -> guardarAparcamientoManual()));
+        col.addView(tituloSeccion("Aparcamiento", null, null));
         LinearLayout aparc = tarjeta();
         LinearLayout filaAparc = new LinearLayout(this);
         filaAparc.setGravity(Gravity.CENTER_VERTICAL);
@@ -179,6 +179,7 @@ public class MainActivity extends Pantalla {
         LinearLayout accionesAparc = new LinearLayout(this);
         accionesAparc.setGravity(Gravity.CENTER_VERTICAL);
         accionesAparc.setPadding(0, dp(16), 0, 0);
+        accionesAparc.addView(accion(R.drawable.ic_pin, "Guardar ubicación", v -> guardarAparcamientoManual()), pesoAccion());
         accionesAparc.addView(accion(R.drawable.ic_camara, "Foto", v -> hacerFoto()), pesoAccion());
         accionesAparc.addView(accionApp("com.google.android.apps.maps", R.drawable.ic_ruta, "Cómo llegar", v -> comoLlegar()), pesoAccion());
         accionesAparc.addView(accionApp("com.whatsapp", R.drawable.ic_enviar, "WhatsApp", v -> enviarWhatsApp()), pesoAccion());
