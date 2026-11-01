@@ -144,6 +144,14 @@ public class RadarView extends View {
         c.drawText(estado, cx, cy + r * 0.52f, texto);
         texto.setTypeface(Typeface.DEFAULT);
 
+        // Incidencia de tráfico delante (DGT)
+        String inc = RadarService.incidenciaTexto;
+        if (activo && inc != null) {
+            texto.setColor(AMBAR);
+            texto.setTextSize(13 * d);
+            c.drawText("⚠ " + inc, cx, cy + r * 0.70f, texto);
+        }
+
         // Señal de límite de velocidad
         if (activo && dist >= 0 && lim > 0) {
             float sr = 26 * d;

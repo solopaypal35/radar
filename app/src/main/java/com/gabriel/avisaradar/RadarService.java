@@ -41,6 +41,7 @@ public class RadarService extends Service implements LocationListener {
     public static volatile int limite = 0;         // km/h, 0 = desconocido
     public static volatile boolean exceso = false; // vas por encima del límite cerca de un radar
     public static volatile boolean hayGps = false;
+    public static volatile String incidenciaTexto = null; // "Accidente a 1,2 km" o null
 
     private List<RadarDB.Radar> radares;
     private LocationManager lm;
@@ -53,6 +54,11 @@ public class RadarService extends Service implements LocationListener {
     /** Para cada radar cercano, cuántos umbrales se han pasado ya. */
     private final Map<RadarDB.Radar, Integer> nivel = new IdentityHashMap<>();
     private long ultimaNotif = 0;
+
+    /** Avisos de tráfico: a 2 km y a 500 m de cada incidencia importante que tengas delante. */
+    static final int[] UMBRALES_TRAFICO = {2000, 500};
+    private final Map<IncidenciasDB.Incidencia, Integer> nivelTrafico = new IdentityHashMap<>();
+    private Thread hiloTrafico;
 
     @Override
     public void onCreate() {
@@ -96,6 +102,7 @@ public class RadarService extends Service implements LocationListener {
             wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AvisaRadar:gps");
             wakeLock.acquire(12 * 60 * 60 * 1000L); // máximo 12 horas
             activo = true;
+            if (Ajustes.avisosTrafico(this)) iniciarTrafico();
         }
         return START_NOT_STICKY;
     }
@@ -108,6 +115,8 @@ public class RadarService extends Service implements LocationListener {
         distancia = -1;
         limite = 0;
         exceso = false;
+        incidenciaTexto = null;
+        if (hiloTrafico != null) hiloTrafico.interrupt();
         if (lm != null) lm.removeUpdates(this);
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (tts != null) tts.shutdown();
@@ -119,6 +128,74 @@ public class RadarService extends Service implements LocationListener {
     @Override
     public IBinder onBind(Intent intent) {
         return null;
+    }
+
+    /** Descarga las incidencias de la DGT al empezar y cada 5 minutos. */
+    private void iniciarTrafico() {
+        hiloTrafico = new Thread(() -> {
+            while (!Thread.currentThread().isInterrupted()) {
+                IncidenciasDB.actualizar();
+                try {
+                    Thread.sleep(5 * 60 * 1000L);
+                } catch (InterruptedException e) {
+                    return;
+                }
+            }
+        });
+        hiloTrafico.setDaemon(true);
+        hiloTrafico.start();
+    }
+
+    private void revisarTrafico(Location loc, double kmh, boolean hayRumbo, float rumbo) {
+        List<IncidenciasDB.Incidencia> lista = IncidenciasDB.actuales;
+        IncidenciasDB.Incidencia cercana = null;
+        double dCercana = Double.MAX_VALUE;
+        float[] res = new float[2];
+        for (IncidenciasDB.Incidencia i : lista) {
+            if (!i.importante) continue;
+            Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), i.lat, i.lon, res);
+            double d = res[0];
+            if (d > 3000) {
+                nivelTrafico.remove(i);
+                continue;
+            }
+            if (hayRumbo && angulo(rumbo, res[1]) > 35) continue;
+            if (d < dCercana) {
+                dCercana = d;
+                cercana = i;
+            }
+        }
+        incidenciaTexto = cercana == null || dCercana > 2500 ? null
+                : cercana.tipo + " a " + distanciaHablada(dCercana);
+        if (cercana == null || kmh < 15) return;
+        int antes = nivelTrafico.containsKey(cercana) ? nivelTrafico.get(cercana) : 0;
+        int ahoraNivel = antes;
+        while (ahoraNivel < UMBRALES_TRAFICO.length && dCercana <= UMBRALES_TRAFICO[ahoraNivel]) ahoraNivel++;
+        if (ahoraNivel > antes) {
+            nivelTrafico.put(cercana, ahoraNivel);
+            String frase = cercana.tipo + " a " + distanciaHablada(dCercana);
+            pitar();
+            hablar(frase);
+            Notification n = new Notification.Builder(this, CANAL_AVISO)
+                    .setSmallIcon(R.drawable.ic_notif)
+                    .setColor(0xFFFFB020)
+                    .setContentTitle("Tráfico" + (cercana.carretera.isEmpty() ? "" : " · " + cercana.carretera))
+                    .setContentText(frase)
+                    .setAutoCancel(true)
+                    .setTimeoutAfter(30000)
+                    .setCategory(Notification.CATEGORY_NAVIGATION)
+                    .build();
+            getSystemService(NotificationManager.class).notify(ID_AVISO + 1, n);
+        }
+    }
+
+    static String distanciaHablada(double m) {
+        if (m >= 1000) {
+            double km = Math.round(m / 100.0) / 10.0;
+            String s = (km == Math.floor(km)) ? String.valueOf((int) km) : String.valueOf(km).replace('.', ',');
+            return s + (km == 1.0 ? " kilómetro" : " kilómetros");
+        }
+        return (Math.round(m / 50.0) * 50) + " metros";
     }
 
     // ---------- Lógica de avisos ----------
@@ -152,6 +229,8 @@ public class RadarService extends Service implements LocationListener {
                 cercano = r;
             }
         }
+
+        if (hiloTrafico != null) revisarTrafico(loc, kmh, hayRumbo, rumbo);
 
         // Estado para la pantalla
         hayGps = true;

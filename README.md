@@ -7,6 +7,8 @@ App Android que avisa por voz de los radares fijos mientras conduces. Funciona e
 - Avisa siempre a 500 m y a 100 m de cada radar, con pitido, voz y notificación («Radar a 500 metros, límite 80»).
 - Si vas por encima del límite, avisa también a 200 y 50 m, y añade «Reduce la velocidad».
 - Solo avisa de los radares que tienes **delante**, y si el radar tiene sentido conocido, solo si coincide con el tuyo.
+- Avisos de tráfico en tiempo real (accidentes, retenciones, obstáculos, cortes) a 2 km y 500 m, con datos abiertos de la DGT, el Servei Català de Trànsit y el Gobierno Vasco. Se pueden desactivar.
+- Mapa ligero opcional (OpenStreetMap) con tu posición, los radares y las incidencias.
 - Puedes guardar tus propios avisos con «Añadir aviso aquí».
 - Los radares se guardan en el móvil, así que los avisos funcionan sin conexión.
 

@@ -25,6 +25,7 @@ import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
+import android.widget.Switch;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -47,7 +48,7 @@ public class MainActivity extends Activity {
     static final int DIAS_ACTUALIZAR = 30;
 
     private final Handler handler = new Handler(Looper.getMainLooper());
-    private TextView botonActivar;
+    private TextView botonActivar, botonMapa;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
     private ObjectAnimator latidoRadares;
@@ -104,6 +105,16 @@ public class MainActivity extends Activity {
         lpBoton.topMargin = dp(8);
         col.addView(botonActivar, lpBoton);
 
+        // Botón del mapa (solo si la opción está activada)
+        botonMapa = texto("Abrir mapa", 16, VERDE, true);
+        botonMapa.setGravity(Gravity.CENTER);
+        botonMapa.setBackground(redondo(TARJETA, VERDE, 26));
+        pulsable(botonMapa, v -> startActivity(new Intent(this, MapaActivity.class)));
+        LinearLayout.LayoutParams lpMapa = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
+        lpMapa.topMargin = dp(10);
+        col.addView(botonMapa, lpMapa);
+
         // Tarjeta de radares (se pone naranja cuando toca actualizar)
         tarjetaRadares = tarjeta();
         LinearLayout filaRadares = new LinearLayout(this);
@@ -133,6 +144,25 @@ public class MainActivity extends Activity {
         pulsable(tarjetaBateria, v -> pedirSinOptimizar());
         col.addView(tarjetaBateria, margenArriba(12));
 
+        // Opciones
+        LinearLayout opciones = tarjeta();
+        opciones.addView(texto("Opciones", 16, TEXTO, true));
+        Switch interMapa = interruptor("Usar mapa", "Mapa ligero con radares e incidencias",
+                Ajustes.usarMapa(this));
+        interMapa.setOnCheckedChangeListener((b, activado) -> {
+            Ajustes.setUsarMapa(this, activado);
+            refrescar();
+        });
+        opciones.addView(interMapa);
+        Switch interTrafico = interruptor("Avisos de tráfico (DGT)",
+                "Accidentes, retenciones, obstáculos y cortes", Ajustes.avisosTrafico(this));
+        interTrafico.setOnCheckedChangeListener((b, activado) -> {
+            Ajustes.setAvisosTrafico(this, activado);
+            reiniciarSiActivo();
+        });
+        opciones.addView(interTrafico);
+        col.addView(opciones, margenArriba(12));
+
         // Mis avisos
         LinearLayout fila = new LinearLayout(this);
         TextView anadir = botonPequeno("+  Aviso aquí");
@@ -150,7 +180,8 @@ public class MainActivity extends Activity {
         TextView ayuda = texto("Activa los avisos y abre Google Maps o Waze: AvisaRadar seguirá "
                 + "avisando en segundo plano, también con la pantalla apagada. Para pararla, usa "
                 + "«Parar» en la notificación.\n\nDatos de radares: © colaboradores de "
-                + "OpenStreetMap (ODbL).", 12, SUB, false);
+                + "OpenStreetMap (ODbL). Incidencias: DGT, Servei Català de Trànsit y "
+                + "Dirección de Tráfico del Gobierno Vasco.", 12, SUB, false);
         ayuda.setPadding(dp(4), dp(18), dp(4), 0);
         col.addView(ayuda);
 
@@ -184,6 +215,7 @@ public class MainActivity extends Activity {
     }
 
     private void refrescar() {
+        botonMapa.setVisibility(Ajustes.usarMapa(this) ? View.VISIBLE : View.GONE);
         // Botón principal
         if (RadarService.activo) {
             botonActivar.setText("Parar avisos");
@@ -387,6 +419,16 @@ public class MainActivity extends Activity {
         t.setTextColor(color);
         if (negrita) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         return t;
+    }
+
+    private Switch interruptor(String titulo, String sub, boolean activado) {
+        Switch s = new Switch(this);
+        s.setText(titulo + "\n" + sub);
+        s.setTextColor(TEXTO);
+        s.setTextSize(14);
+        s.setChecked(activado);
+        s.setPadding(0, dp(10), 0, dp(4));
+        return s;
     }
 
     private LinearLayout tarjeta() {
