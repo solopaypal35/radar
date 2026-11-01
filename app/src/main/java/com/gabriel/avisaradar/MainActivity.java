@@ -39,6 +39,9 @@ public class MainActivity extends Pantalla {
     static final int DIAS_ACTUALIZAR = 30;
 
     private View botonActivar;
+    private ImageView iconoPower;
+    private TextView textoPower;
+    static final int VERDE_ENCENDER = 0xFF22C55E;
     private TextView estadoCabecera, aparcTexto, titularHero, etiquetaHero, senalLimite, botonMapa;
     private VelocimetroView velocimetro;
     private double aparcLatMostrada = Double.NaN;
@@ -231,11 +234,21 @@ public class MainActivity extends Pantalla {
         barra.addView(nav);
         View sep = new View(this);
         barra.addView(sep, new LinearLayout.LayoutParams(0, 1, 1f));
-        android.widget.FrameLayout power = botonIcono(R.drawable.ic_power, 0xFF061012, 28, degradado(34));
-        power.setContentDescription("Activar o parar avisos");
-        pulsable(power, v -> alternar());
+        // Botón de encendido: píldora con icono y texto. Verde = «Encender», rojo = «Apagar»
+        LinearLayout power = new LinearLayout(this);
+        power.setGravity(Gravity.CENTER);
+        power.setPadding(dp(18), 0, dp(22), 0);
+        iconoPower = icono(R.drawable.ic_power, 0xFFFFFFFF, 22);
+        power.addView(iconoPower);
+        textoPower = texto("Encender", 16, 0xFFFFFFFF, true);
+        textoPower.setPadding(dp(8), 0, 0, 0);
+        power.addView(textoPower);
+        pulsable(power, v -> {
+            vibrarCorto();
+            alternar();
+        });
         botonActivar = power;
-        barra.addView(power, new LinearLayout.LayoutParams(dp(68), dp(68)));
+        barra.addView(power, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT, dp(64)));
         android.widget.FrameLayout.LayoutParams lpBarra = new android.widget.FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.BOTTOM);
         lpBarra.setMargins(dp(18), 0, dp(18), dp(22));
@@ -268,15 +281,10 @@ public class MainActivity extends Pantalla {
     private void refrescar() {
         refrescarAparcamiento();
         boolean activo = RadarService.activo;
-        // Botón de encendido: degradado turquesa si está parado (invita a pulsarlo), rojo si está activo
-        if (activo) {
-            android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
-            g.setShape(android.graphics.drawable.GradientDrawable.OVAL);
-            g.setColor(ROJO);
-            botonActivar.setBackground(g);
-        } else {
-            botonActivar.setBackground(degradado(34));
-        }
+        // Botón de encendido: dice lo que va a hacer al pulsarlo
+        botonActivar.setBackground(redondo(activo ? ROJO : VERDE_ENCENDER, activo ? ROJO : VERDE_ENCENDER, 32));
+        textoPower.setText(activo ? "Apagar" : "Encender");
+        botonActivar.setContentDescription(activo ? "Apagar los avisos" : "Encender los avisos");
         // Píldora de estado
         estadoCabecera.setText(activo ? "●  Activo" : "Parado");
         estadoCabecera.setTextColor(activo ? VERDE : SUB);
@@ -344,6 +352,15 @@ public class MainActivity extends Pantalla {
                 latidoRadares = null;
                 tarjetaRadares.setAlpha(1f);
             }
+        }
+    }
+
+    /** Vibración corta para confirmar que se ha pulsado el botón sin mirar la pantalla. */
+    private void vibrarCorto() {
+        try {
+            android.os.Vibrator v = getSystemService(android.os.Vibrator.class);
+            if (v != null) v.vibrate(android.os.VibrationEffect.createOneShot(60, android.os.VibrationEffect.DEFAULT_AMPLITUDE));
+        } catch (Exception ignored) {
         }
     }
 
