@@ -27,7 +27,7 @@ jobs:
         run: |
           mkdir -p app/src/main/assets
           Q='[out:json][timeout:90];(node["highway"="speed_camera"](35.1,-9.6,43.9,4.5);node["highway"="speed_camera"](27.5,-18.3,29.5,-13.3););out body;'
-          for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+          for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter; do
             echo "Probando $URL"
             if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/radares.json \
                && grep -q '"lat"' app/src/main/assets/radares.json; then
@@ -44,7 +44,7 @@ jobs:
         run: |
           mkdir -p app/src/main/assets datos
           Q='[out:json][timeout:90];(relation["enforcement"="average_speed"](35.1,-9.6,43.9,4.5);relation["enforcement"="average_speed"](27.5,-18.3,29.5,-13.3););out body;>;out skel qt;'
-          for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+          for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter; do
             echo "Probando $URL"
             if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/tramos.json \
                && grep -q '"relation"' app/src/main/assets/tramos.json; then
@@ -61,7 +61,7 @@ jobs:
           mkdir -p app/src/main/assets datos
           descargar() {
             NOMBRE=$1; Q=$2; PRUEBA=$3
-            for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://maps.mail.ru/osm/tools/overpass/api/interpreter https://overpass.kumi.systems/api/interpreter; do
+            for URL in https://overpass-api.de/api/interpreter https://overpass.private.coffee/api/interpreter https://overpass.kumi.systems/api/interpreter; do
               if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/$NOMBRE.json \
                  && grep -q "$PRUEBA" app/src/main/assets/$NOMBRE.json; then
                 echo "$NOMBRE incluidos desde $URL"
