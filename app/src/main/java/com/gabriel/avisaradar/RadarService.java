@@ -419,8 +419,10 @@ public class RadarService extends Service implements LocationListener {
         velocidad = (int) Math.round(kmh);
         boolean cerca = cercano != null && dCercano < 1500;
         distancia = cerca ? (int) dCercano : -1;
-        limite = cerca ? cercano.limite : 0;
-        exceso = cerca && dCercano <= 500 && cercano.limite > 0 && kmh > cercano.limite + 3;
+        // Si el radar no tiene límite anotado, se usa el de la carretera por la que vas
+        int limRadar = cerca ? (cercano.limite > 0 ? cercano.limite : limiteVia) : 0;
+        limite = limRadar;
+        exceso = cerca && dCercano <= 500 && limRadar > 0 && kmh > limRadar + 3;
 
         long ahora = System.currentTimeMillis();
         if (cercano != null && kmh >= 15) {
@@ -430,15 +432,15 @@ public class RadarService extends Service implements LocationListener {
             if (ahoraNivel > antes) {
                 nivel.put(cercano, ahoraNivel);
                 int umbral = UMBRALES[ahoraNivel - 1];
-                boolean rapido = cercano.limite > 0 && kmh > cercano.limite + 3;
+                boolean rapido = limRadar > 0 && kmh > limRadar + 3;
                 if (Ajustes.soloSiMePaso(this) && !rapido) {
                     // Opción «solo si me paso»: no se avisa
                 } else if (antes == 0) {
                     // Primer aviso de este radar (normalmente a 500 m)
-                    avisar(cercano, umbral == 500 ? 500 : redondear(dCercano), rapido);
+                    avisar(cercano, umbral == 500 ? 500 : redondear(dCercano), limRadar, rapido);
                 } else if (rapido || umbral == 100 || umbral == 50) {
                     // 100 y 50 m: siempre. 200 m: solo si todavía vas por encima del límite
-                    avisar(cercano, umbral, rapido);
+                    avisar(cercano, umbral, limRadar, rapido);
                 }
             }
         }
@@ -448,7 +450,7 @@ public class RadarService extends Service implements LocationListener {
             String texto;
             if (cercano != null && dCercano < 1500) {
                 texto = (cercano.propio ? "Aviso" : "Radar") + " a " + redondear(dCercano) + " m"
-                        + (cercano.limite > 0 ? " · límite " + cercano.limite : "");
+                        + (limite > 0 ? " · límite " + limite : "");
             } else {
                 texto = "Sin radares cerca";
             }
@@ -458,9 +460,9 @@ public class RadarService extends Service implements LocationListener {
         }
     }
 
-    private void avisar(RadarDB.Radar r, int metros, boolean exceso) {
+    private void avisar(RadarDB.Radar r, int metros, int lim, boolean exceso) {
         String frase = (r.propio ? "Aviso a " : "Radar a ") + metros + " metros";
-        if (r.limite > 0) frase += ", límite " + r.limite;
+        if (lim > 0) frase += ", límite " + lim;
         if (exceso) frase += ". Reduce la velocidad";
         emitir(frase);
         notificar(r.propio ? "Aviso" : "Radar", frase, 0xFFFF4D5E, ID_AVISO);

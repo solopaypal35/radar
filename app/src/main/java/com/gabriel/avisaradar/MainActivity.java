@@ -50,6 +50,7 @@ public class MainActivity extends Activity {
     private final Handler handler = new Handler(Looper.getMainLooper());
     private TextView botonActivar, botonMapa, aparcTexto;
     private final TextView[] chipsTipo = new TextView[3];
+    private final TextView[] chipsComb = new TextView[Gasolineras.NOMBRES.length];
     private double aparcLatMostrada = Double.NaN;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
@@ -230,6 +231,32 @@ public class MainActivity extends Activity {
         }
         pintarTipoAviso();
         opciones.addView(filaTipo);
+
+        // Combustible que usas (para los precios de las gasolineras del mapa)
+        LinearLayout filaComb = new LinearLayout(this);
+        filaComb.setGravity(Gravity.CENTER_VERTICAL);
+        filaComb.setPadding(0, dp(10), 0, dp(4));
+        filaComb.addView(texto("Combustible", 14, TEXTO, false),
+                new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        for (int i = 0; i < Gasolineras.NOMBRES.length; i++) {
+            final int tipo = i;
+            TextView chip = botonPequeno(Gasolineras.NOMBRES[i]);
+            chip.setTextSize(12);
+            pulsable(chip, v -> {
+                Ajustes.setCombustible(this, tipo);
+                pintarCombustible();
+            });
+            chipsComb[i] = chip;
+            LinearLayout.LayoutParams lpChip = new LinearLayout.LayoutParams(dp(56), dp(36));
+            lpChip.leftMargin = dp(4);
+            filaComb.addView(chip, lpChip);
+        }
+        pintarCombustible();
+        opciones.addView(filaComb);
+
+        Switch interGas = interruptor("Gasolineras en el mapa", Ajustes.gasolineras(this));
+        interGas.setOnCheckedChangeListener((b, activado) -> Ajustes.setGasolineras(this, activado));
+        opciones.addView(interGas);
 
         Switch interSolo = interruptor("Solo si me paso", Ajustes.soloSiMePaso(this));
         interSolo.setOnCheckedChangeListener((b, activado) -> Ajustes.setSoloSiMePaso(this, activado));
@@ -517,6 +544,15 @@ public class MainActivity extends Activity {
             boolean si = i == elegido;
             chipsTipo[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
             chipsTipo[i].setTextColor(si ? FONDO : TEXTO);
+        }
+    }
+
+    private void pintarCombustible() {
+        int elegido = Ajustes.combustible(this);
+        for (int i = 0; i < chipsComb.length; i++) {
+            boolean si = i == elegido;
+            chipsComb[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
+            chipsComb[i].setTextColor(si ? FONDO : TEXTO);
         }
     }
 

@@ -89,6 +89,25 @@ public class Ajustes {
         prefs(c).edit().putInt("burbuja_x", x).putInt("burbuja_y", y).apply();
     }
 
+    // ---------- Gasolineras ----------
+
+    /** Posición en Gasolineras.IDS del combustible que usas (0 = gasolina 95). */
+    public static int combustible(Context c) {
+        return prefs(c).getInt("combustible", 0);
+    }
+
+    public static void setCombustible(Context c, int v) {
+        prefs(c).edit().putInt("combustible", v).apply();
+    }
+
+    public static boolean gasolineras(Context c) {
+        return prefs(c).getBoolean("gasolineras", true);
+    }
+
+    public static void setGasolineras(Context c, boolean v) {
+        prefs(c).edit().putBoolean("gasolineras", v).apply();
+    }
+
     // ---------- Dónde he aparcado ----------
 
     public static boolean aparcarAuto(Context c) {

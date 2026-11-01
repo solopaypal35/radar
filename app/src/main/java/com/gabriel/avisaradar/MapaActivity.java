@@ -45,6 +45,10 @@ public class MapaActivity extends Activity {
     private TextView velocidad, botonCentrar;
     private List<RadarDB.Radar> radaresMapa = new ArrayList<>();
     private final List<Overlay> marcasTrafico = new ArrayList<>();
+    private final List<Overlay> marcasGasolineras = new ArrayList<>();
+    private List<Gasolineras.Estacion> gasolineras = null;
+    private Location gasolinerasDesde = null;
+    private boolean cargandoGasolineras = false;
     private List<IncidenciasDB.Incidencia> traficoPintado = null;
     private final Handler handler = new Handler(Looper.getMainLooper());
     private boolean rumboArriba;
@@ -179,6 +183,7 @@ public class MapaActivity extends Activity {
                 mapa.setMapOrientation(-fix.getBearing());
             }
         }
+        if (Ajustes.gasolineras(this)) revisarGasolineras(fix);
         if (Ajustes.avisosTrafico(this) && IncidenciasDB.actuales != traficoPintado) {
             pintarTrafico(IncidenciasDB.actuales);
         }
@@ -250,17 +255,153 @@ public class MapaActivity extends Activity {
         return b;
     }
 
+    // ---------- Gasolineras ----------
+
+    /** Descarga los precios una vez y vuelve a pintar si te alejas más de 3 km. */
+    private void revisarGasolineras(Location fix) {
+        if (fix == null || cargandoGasolineras) return;
+        if (gasolinerasDesde != null && gasolinerasDesde.distanceTo(fix) < 3000) return;
+        gasolinerasDesde = fix;
+        if (gasolineras != null) {
+            pintarGasolineras(fix);
+            return;
+        }
+        cargandoGasolineras = true;
+        int comb = Ajustes.combustible(this);
+        new Thread(() -> {
+            List<Gasolineras.Estacion> lista = Gasolineras.obtener(this, comb);
+            runOnUiThread(() -> {
+                cargandoGasolineras = false;
+                if (isFinishing()) return;
+                if (lista.isEmpty()) {
+                    gasolinerasDesde = null; // se reintentará
+                    return;
+                }
+                gasolineras = lista;
+                pintarGasolineras(fix);
+            });
+        }).start();
+    }
+
+    /** Las 30 gasolineras más cercanas (a menos de 10 km), coloreadas de más barata a más cara. */
+    private void pintarGasolineras(Location fix) {
+        mapa.getOverlays().removeAll(marcasGasolineras);
+        marcasGasolineras.clear();
+        List<Gasolineras.Estacion> cerca = new ArrayList<>();
+        List<Float> distancias = new ArrayList<>();
+        float[] res = new float[1];
+        for (Gasolineras.Estacion e : gasolineras) {
+            Location.distanceBetween(fix.getLatitude(), fix.getLongitude(), e.lat, e.lon, res);
+            if (res[0] > 10000) continue;
+            int i = 0;
+            while (i < distancias.size() && distancias.get(i) < res[0]) i++;
+            distancias.add(i, res[0]);
+            cerca.add(i, e);
+        }
+        if (cerca.size() > 30) cerca = new ArrayList<>(cerca.subList(0, 30));
+        if (cerca.isEmpty()) return;
+        double min = Double.MAX_VALUE, max = 0;
+        for (Gasolineras.Estacion e : cerca) {
+            min = Math.min(min, e.precio);
+            max = Math.max(max, e.precio);
+        }
+        String comb = Gasolineras.NOMBRES_LARGOS[Ajustes.combustible(this)];
+        final double minimo = min;
+        for (Gasolineras.Estacion e : cerca) {
+            double f = max > min ? (e.precio - min) / (max - min) : 0;
+            int color = f < 0.34 ? MainActivity.VERDE : f < 0.67 ? MainActivity.AMBAR : MainActivity.ROJO;
+            Marker m = new Marker(mapa);
+            m.setPosition(new GeoPoint(e.lat, e.lon));
+            m.setAnchor(Marker.ANCHOR_CENTER, Marker.ANCHOR_BOTTOM);
+            m.setIcon(new android.graphics.drawable.BitmapDrawable(getResources(),
+                    etiquetaPrecio(e, color, e.precio == min)));
+            m.setOnMarkerClickListener((marca, vista) -> {
+                mostrarGasolinera(e, comb, e.precio == minimo);
+                return true;
+            });
+            marcasGasolineras.add(m);
+        }
+        mapa.getOverlays().addAll(marcasGasolineras);
+        mapa.invalidate();
+    }
+
+    /** Etiqueta con el precio y el nombre de la gasolinera. */
+    private android.graphics.Bitmap etiquetaPrecio(Gasolineras.Estacion e, int color, boolean masBarata) {
+        String precio = String.format(java.util.Locale.US, "%.3f", e.precio).replace('.', ',') + " €";
+        String nombre = e.rotulo.isEmpty() ? "Gasolinera" : e.rotulo;
+        if (nombre.length() > 14) nombre = nombre.substring(0, 13) + "…";
+        Paint p1 = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p1.setTextSize(dp(13));
+        p1.setTypeface(Typeface.DEFAULT_BOLD);
+        Paint p2 = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p2.setTextSize(dp(9));
+        int ancho = (int) Math.max(p1.measureText(precio), p2.measureText(nombre)) + dp(14);
+        int alto = dp(36), pico = dp(6);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(ancho, alto + pico,
+                android.graphics.Bitmap.Config.ARGB_8888);
+        android.graphics.Canvas c = new android.graphics.Canvas(b);
+        Paint fondo = new Paint(Paint.ANTI_ALIAS_FLAG);
+        fondo.setColor(color);
+        c.drawRoundRect(0, 0, ancho, alto, dp(8), dp(8), fondo);
+        android.graphics.Path punta = new android.graphics.Path();
+        punta.moveTo(ancho / 2f - pico, alto);
+        punta.lineTo(ancho / 2f + pico, alto);
+        punta.lineTo(ancho / 2f, alto + pico);
+        punta.close();
+        c.drawPath(punta, fondo);
+        if (masBarata) {
+            Paint borde = new Paint(Paint.ANTI_ALIAS_FLAG);
+            borde.setStyle(Paint.Style.STROKE);
+            borde.setStrokeWidth(dp(2));
+            borde.setColor(Color.WHITE);
+            c.drawRoundRect(dp(1), dp(1), ancho - dp(1), alto - dp(1), dp(8), dp(8), borde);
+        }
+        p1.setColor(MainActivity.FONDO);
+        p2.setColor(MainActivity.FONDO);
+        p1.setTextAlign(Paint.Align.CENTER);
+        p2.setTextAlign(Paint.Align.CENTER);
+        c.drawText(precio, ancho / 2f, dp(16), p1);
+        c.drawText(nombre, ancho / 2f, dp(29), p2);
+        return b;
+    }
+
+    private void mostrarGasolinera(Gasolineras.Estacion e, String comb, boolean masBarata) {
+        String precio = String.format(java.util.Locale.US, "%.3f", e.precio).replace('.', ',');
+        String texto = comb + ": " + precio + " €/l" + (masBarata ? "  (la más barata de la zona)" : "")
+                + "\n\n" + e.direccion + (e.localidad.isEmpty() ? "" : ", " + e.localidad)
+                + (e.horario.isEmpty() ? "" : "\nHorario: " + e.horario);
+        new android.app.AlertDialog.Builder(this)
+                .setTitle(e.rotulo.isEmpty() ? "Gasolinera" : e.rotulo)
+                .setMessage(texto)
+                .setPositiveButton("Cómo llegar", (d, w) -> {
+                    String url = String.format(java.util.Locale.US,
+                            "https://www.google.com/maps/dir/?api=1&destination=%.6f,%.6f&travelmode=driving", e.lat, e.lon);
+                    startActivity(new android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(url)));
+                })
+                .setNegativeButton("Cerrar", null)
+                .show();
+    }
+
     /** Al tocar un radar: su límite y un botón para verlo en Street View. */
     private void mostrarRadar(RadarDB.Radar r) {
         String titulo = r.propio ? "Aviso propio" : "Radar fijo";
-        String texto = (r.limite > 0 ? "Límite " + r.limite + " km/h" : "Límite no indicado")
-                + "\n\nStreet View te enseña la carretera desde el punto más cercano al radar.";
-        new android.app.AlertDialog.Builder(this)
+        String nota = "\n\nStreet View te enseña la carretera desde el punto más cercano al radar.";
+        android.app.AlertDialog dialogo = new android.app.AlertDialog.Builder(this)
                 .setTitle(titulo)
-                .setMessage(texto)
+                .setMessage((r.limite > 0 ? "Límite " + r.limite + " km/h" : "Buscando el límite de la carretera…") + nota)
                 .setPositiveButton("Ver en Street View", (d, w) -> abrirStreetView(r.lat, r.lon))
                 .setNegativeButton("Cerrar", null)
                 .show();
+        if (r.limite <= 0) {
+            new Thread(() -> {
+                int lim = LimiteVia.consultar(r.lat, r.lon);
+                String t = lim > 0 ? "Límite " + lim + " km/h (el de la carretera donde está)"
+                        : lim == 0 ? "Límite no indicado en el mapa" : "Sin conexión: no se pudo consultar el límite";
+                runOnUiThread(() -> {
+                    if (dialogo.isShowing()) dialogo.setMessage(t + nota);
+                });
+            }).start();
+        }
     }
 
     private void abrirStreetView(double lat, double lon) {
