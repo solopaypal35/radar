@@ -41,7 +41,7 @@ public class MainActivity extends Pantalla {
     private TextView botonActivar, botonMapa, aparcTexto;
     private double aparcLatMostrada = Double.NaN;
     private ImageView fotoAparc;
-    private long fotoMostrada = -1;
+    private String fotoMostrada = null;
     static final int PEDIR_FOTO = 20;
     private LinearLayout tarjetaRadares, tarjetaBateria;
     private TextView radaresTitulo, radaresSub, radaresAccion;
@@ -344,6 +344,10 @@ public class MainActivity extends Pantalla {
             guardarAparcamientoManual();
             return;
         }
+        if (code == 5) {
+            if (checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) hacerFoto();
+            return;
+        }
         if (code != 1) return;
         if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)
                 == PackageManager.PERMISSION_GRANTED) {
@@ -511,11 +515,13 @@ public class MainActivity extends Pantalla {
             toast("Primero guarda dónde has aparcado");
             return;
         }
+        Uri foto = fotoUri();
         Intent i = new Intent(Intent.ACTION_SEND);
         i.putExtra(Intent.EXTRA_TEXT, "Mi coche está aparcado aquí: " + enlaceAparcamiento());
-        if (fotoFichero().exists()) {
+        if (foto != null) {
             i.setType("image/jpeg");
-            i.putExtra(Intent.EXTRA_STREAM, FotoProvider.URI);
+            i.putExtra(Intent.EXTRA_STREAM, foto);
+            i.setClipData(android.content.ClipData.newRawUri("Aparcamiento", foto));
             i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         } else {
             i.setType("text/plain");
@@ -533,9 +539,21 @@ public class MainActivity extends Pantalla {
     }
 
     // ---------- Foto del aparcamiento ----------
+    // La foto se guarda en la galería (álbum «AvisaRadar»), para que la cámara pueda
+    // escribirla y WhatsApp leerla sin problemas en cualquier móvil.
 
-    private java.io.File fotoFichero() {
-        return new java.io.File(getFilesDir(), FotoProvider.FICHERO);
+    private Uri fotoPendiente;
+
+    /** La foto del aparcamiento actual, o null si no hay (o se ha borrado de la galería). */
+    private Uri fotoUri() {
+        String s = Ajustes.aparcFoto(this);
+        if (s == null) return null;
+        Uri u = Uri.parse(s);
+        try (java.io.InputStream in = getContentResolver().openInputStream(u)) {
+            return in != null && in.read() != -1 ? u : null;
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     private void hacerFoto() {
@@ -543,52 +561,106 @@ public class MainActivity extends Pantalla {
             toast("Primero guarda dónde has aparcado");
             return;
         }
+        if (Build.VERSION.SDK_INT < 29
+                && checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.WRITE_EXTERNAL_STORAGE}, 5);
+            return;
+        }
+        android.content.ContentValues v = new android.content.ContentValues();
+        v.put(android.provider.MediaStore.Images.Media.DISPLAY_NAME,
+                "aparcamiento_" + new java.text.SimpleDateFormat("yyyyMMdd_HHmmss", java.util.Locale.US)
+                        .format(new java.util.Date()) + ".jpg");
+        v.put(android.provider.MediaStore.Images.Media.MIME_TYPE, "image/jpeg");
+        if (Build.VERSION.SDK_INT >= 29) {
+            v.put(android.provider.MediaStore.Images.Media.RELATIVE_PATH, "Pictures/AvisaRadar");
+        }
+        try {
+            fotoPendiente = getContentResolver().insert(
+                    android.provider.MediaStore.Images.Media.EXTERNAL_CONTENT_URI, v);
+        } catch (Exception e) {
+            fotoPendiente = null;
+        }
+        if (fotoPendiente == null) {
+            toast("No se pudo preparar la foto");
+            return;
+        }
         Intent i = new Intent(android.provider.MediaStore.ACTION_IMAGE_CAPTURE);
-        i.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, FotoProvider.URI);
+        i.putExtra(android.provider.MediaStore.EXTRA_OUTPUT, fotoPendiente);
         i.addFlags(Intent.FLAG_GRANT_WRITE_URI_PERMISSION | Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        i.setClipData(android.content.ClipData.newRawUri("foto", FotoProvider.URI));
         try {
             startActivityForResult(i, PEDIR_FOTO);
         } catch (Exception e) {
+            borrarPendiente();
             toast("No se encontró la cámara");
         }
+    }
+
+    private void borrarPendiente() {
+        if (fotoPendiente != null) {
+            try {
+                getContentResolver().delete(fotoPendiente, null, null);
+            } catch (Exception ignored) {
+            }
+            fotoPendiente = null;
+        }
+    }
+
+    @Override
+    protected void onSaveInstanceState(Bundle estado) {
+        super.onSaveInstanceState(estado);
+        if (fotoPendiente != null) estado.putString("foto_pendiente", fotoPendiente.toString());
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Bundle estado) {
+        super.onRestoreInstanceState(estado);
+        String s = estado.getString("foto_pendiente");
+        if (s != null) fotoPendiente = Uri.parse(s);
     }
 
     @Override
     protected void onActivityResult(int code, int resultado, Intent datos) {
         super.onActivityResult(code, resultado, datos);
-        if (code == PEDIR_FOTO) {
-            if (resultado == RESULT_OK && fotoFichero().length() > 0) toast("Foto guardada con el aparcamiento");
-            fotoMostrada = -1;
-            refrescarFoto();
+        if (code != PEDIR_FOTO) return;
+        if (resultado == RESULT_OK && fotoPendiente != null) {
+            Ajustes.setAparcFoto(this, fotoPendiente.toString());
+            fotoPendiente = null;
+            toast("Foto guardada con el aparcamiento");
+        } else {
+            borrarPendiente(); // se canceló: no dejar una foto vacía en la galería
         }
+        fotoMostrada = null;
+        refrescarFoto();
     }
 
     /** Muestra la miniatura si hay foto (solo vuelve a leerla si ha cambiado). */
     private void refrescarFoto() {
-        java.io.File f = fotoFichero();
-        long marca = f.exists() && f.length() > 0 ? f.lastModified() : 0;
-        if (marca == fotoMostrada) return;
-        fotoMostrada = marca;
-        if (marca == 0) {
+        String actual = Ajustes.aparcFoto(this);
+        if (actual == null) actual = "";
+        if (actual.equals(fotoMostrada)) return;
+        fotoMostrada = actual;
+        Uri u = fotoUri();
+        android.graphics.Bitmap b = null;
+        if (u != null) {
+            try (java.io.InputStream in = getContentResolver().openInputStream(u)) {
+                android.graphics.BitmapFactory.Options op = new android.graphics.BitmapFactory.Options();
+                op.inSampleSize = 4; // miniatura ligera
+                b = android.graphics.BitmapFactory.decodeStream(in, null, op);
+            } catch (Exception ignored) {
+            }
+        }
+        if (b == null) {
             fotoAparc.setImageDrawable(null);
             fotoAparc.setVisibility(View.GONE);
             return;
         }
-        android.graphics.BitmapFactory.Options op = new android.graphics.BitmapFactory.Options();
-        op.inSampleSize = 4; // miniatura ligera
-        android.graphics.Bitmap b = android.graphics.BitmapFactory.decodeFile(f.getPath(), op);
-        if (b == null) {
-            fotoAparc.setVisibility(View.GONE);
-            return;
-        }
-        fotoAparc.setImageBitmap(rotarSegunExif(f, b));
+        fotoAparc.setImageBitmap(rotarSegunExif(u, b));
         fotoAparc.setVisibility(View.VISIBLE);
     }
 
-    private android.graphics.Bitmap rotarSegunExif(java.io.File f, android.graphics.Bitmap b) {
-        try {
-            int o = new android.media.ExifInterface(f.getPath()).getAttributeInt(
+    private android.graphics.Bitmap rotarSegunExif(Uri u, android.graphics.Bitmap b) {
+        try (java.io.InputStream in = getContentResolver().openInputStream(u)) {
+            int o = new android.media.ExifInterface(in).getAttributeInt(
                     android.media.ExifInterface.TAG_ORIENTATION, android.media.ExifInterface.ORIENTATION_NORMAL);
             int grados = o == android.media.ExifInterface.ORIENTATION_ROTATE_90 ? 90
                     : o == android.media.ExifInterface.ORIENTATION_ROTATE_180 ? 180
@@ -603,8 +675,10 @@ public class MainActivity extends Pantalla {
     }
 
     private void verFoto() {
+        Uri u = fotoUri();
+        if (u == null) return;
         Intent i = new Intent(Intent.ACTION_VIEW);
-        i.setDataAndType(FotoProvider.URI, "image/jpeg");
+        i.setDataAndType(u, "image/jpeg");
         i.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
         try {
             startActivity(i);

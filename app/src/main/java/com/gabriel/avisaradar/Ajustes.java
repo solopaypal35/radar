@@ -185,10 +185,20 @@ public class Ajustes {
         // Un aparcamiento nuevo no conserva la foto del anterior
         new java.io.File(c.getFilesDir(), FotoProvider.FICHERO).delete();
         prefs(c).edit()
+                .remove("aparc_foto")
                 .putLong("aparc_lat", Double.doubleToRawLongBits(lat))
                 .putLong("aparc_lon", Double.doubleToRawLongBits(lon))
                 .putLong("aparc_hora", System.currentTimeMillis())
                 .apply();
+    }
+
+    /** Dirección (content://) de la foto del aparcamiento en la galería, o null. */
+    public static String aparcFoto(Context c) {
+        return prefs(c).getString("aparc_foto", null);
+    }
+
+    public static void setAparcFoto(Context c, String uri) {
+        prefs(c).edit().putString("aparc_foto", uri).apply();
     }
 
     public static void borrarAparcamiento(Context c) {
