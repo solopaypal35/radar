@@ -19,15 +19,16 @@ import android.widget.Toast;
 /** Colores y piezas de interfaz comunes a todas las pantallas de la app. */
 public class Pantalla extends Activity {
 
-    // Paleta: gris carbón con acentos cian
-    static final int FONDO = 0xFF2B2F36;
-    static final int TARJETA = 0xFF30353D;
-    static final int BORDE = 0xFF3A4049;      // luz del relieve y separadores
-    static final int SOMBRA = 0xFF1D2025;     // sombra del relieve
-    static final int HUNDIDO = 0xFF1E2227;    // fondo de interruptores apagados
-    static final int TEXTO = 0xFFE9EDF2;
-    static final int SUB = 0xFF8C95A1;
-    static final int VERDE = 0xFF18C2E0;      // color de acento (cian)
+    // Paleta: negro profundo, tarjetas oscuras y acento turquesa
+    static final int FONDO = 0xFF07090A;
+    static final int TARJETA = 0xFF131718;
+    static final int BORDE = 0xFF1F2527;      // borde fino de las tarjetas y separadores
+    static final int SOMBRA = 0xFF000000;
+    static final int HUNDIDO = 0xFF1C2224;    // fondo de pistas e interruptores apagados
+    static final int TEXTO = 0xFFF2F5F5;
+    static final int SUB = 0xFF7E8A8C;
+    static final int VERDE = 0xFF3FC1CF;      // color de acento (turquesa)
+    static final int TURQUESA_OSCURO = 0xFF0E5560;
     static final int AMBAR = 0xFFFFB020;
     static final int AMBAR_FONDO = 0xFF3A2F14;
     static final int ROJO = 0xFFFF4D5E;
@@ -52,6 +53,7 @@ public class Pantalla extends Activity {
         t.setText(s);
         t.setTextSize(sp);
         t.setTextColor(color);
+        t.setIncludeFontPadding(false);
         if (negrita) t.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         return t;
     }
@@ -66,7 +68,7 @@ public class Pantalla extends Activity {
     protected LinearLayout tarjeta() {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        t.setBackground(relieve(18));
+        t.setBackground(relieve(26));
         t.setPadding(dp(20), dp(18), dp(20), dp(18));
         return t;
     }
@@ -76,23 +78,37 @@ public class Pantalla extends Activity {
      * como las tarjetas del diseño. Deja un pequeño margen para que se vean.
      */
     protected android.graphics.drawable.Drawable relieve(int radioDp) {
-        GradientDrawable sombra = new GradientDrawable();
-        sombra.setColor(SOMBRA);
-        sombra.setCornerRadius(dp(radioDp));
-        GradientDrawable luz = new GradientDrawable();
-        luz.setColor(BORDE);
-        luz.setCornerRadius(dp(radioDp));
-        GradientDrawable cara = new GradientDrawable();
-        cara.setColor(TARJETA);
-        cara.setCornerRadius(dp(radioDp));
-        android.graphics.drawable.LayerDrawable l = new android.graphics.drawable.LayerDrawable(
-                new android.graphics.drawable.Drawable[]{sombra, luz, cara});
-        int a = dp(4), b = dp(2);
-        l.setLayerInset(0, a, a, 0, 0);
-        l.setLayerInset(1, 0, 0, a, a);
-        l.setLayerInset(2, b, b, b, b);
-        return l;
+        return redondo(TARJETA, BORDE, radioDp);
     }
+
+    /** Degradado turquesa (para el botón principal y lo seleccionado). */
+    protected GradientDrawable degradado(int radioDp) {
+        GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TL_BR,
+                new int[]{0xFF6FE3EC, VERDE, TURQUESA_OSCURO});
+        g.setCornerRadius(dp(radioDp));
+        return g;
+    }
+
+    /** Icono (vector blanco) teñido del color indicado. */
+    protected android.widget.ImageView icono(int recurso, int color, int tamDp) {
+        android.widget.ImageView i = new android.widget.ImageView(this);
+        i.setImageResource(recurso);
+        i.setColorFilter(color);
+        i.setLayoutParams(new LinearLayout.LayoutParams(dp(tamDp), dp(tamDp)));
+        return i;
+    }
+
+    /** Botón redondo con un icono perfectamente centrado. */
+    protected android.widget.FrameLayout botonIcono(int recurso, int color, int tamDp, android.graphics.drawable.Drawable fondo) {
+        android.widget.FrameLayout f = new android.widget.FrameLayout(this);
+        f.setBackground(fondo);
+        android.widget.ImageView i = new android.widget.ImageView(this);
+        i.setImageResource(recurso);
+        i.setColorFilter(color);
+        f.addView(i, new android.widget.FrameLayout.LayoutParams(dp(tamDp), dp(tamDp), Gravity.CENTER));
+        return f;
+    }
+
 
     /** Línea fina para separar filas dentro de una tarjeta. */
     protected View separador() {
@@ -125,7 +141,7 @@ public class Pantalla extends Activity {
         s.setPadding(0, dp(12), 0, dp(12));
         int[][] estados = {{android.R.attr.state_checked}, {}};
         s.setThumbTintList(new android.content.res.ColorStateList(estados, new int[]{0xFFFFFFFF, 0xFFDDE2E8}));
-        s.setTrackTintList(new android.content.res.ColorStateList(estados, new int[]{VERDE, HUNDIDO}));
+        s.setTrackTintList(new android.content.res.ColorStateList(estados, new int[]{VERDE, 0xFF2A3234}));
         s.setTrackTintMode(android.graphics.PorterDuff.Mode.SRC);
         return s;
     }
@@ -141,8 +157,8 @@ public class Pantalla extends Activity {
     protected void marcarChips(TextView[] chips, int elegido) {
         for (int i = 0; i < chips.length; i++) {
             boolean si = i == elegido;
-            chips[i].setBackground(si ? redondo(VERDE, VERDE, 18) : relieve(18));
-            chips[i].setTextColor(si ? 0xFFFFFFFF : SUB);
+            chips[i].setBackground(si ? degradado(20) : redondo(TARJETA, BORDE, 20));
+            chips[i].setTextColor(si ? 0xFF061012 : SUB);
         }
     }
 
@@ -175,23 +191,13 @@ public class Pantalla extends Activity {
     }
 
     protected android.graphics.drawable.Drawable relieveOval() {
-        GradientDrawable sombra = new GradientDrawable();
-        sombra.setShape(GradientDrawable.OVAL);
-        sombra.setColor(SOMBRA);
-        GradientDrawable luz = new GradientDrawable();
-        luz.setShape(GradientDrawable.OVAL);
-        luz.setColor(BORDE);
-        GradientDrawable cara = new GradientDrawable();
-        cara.setShape(GradientDrawable.OVAL);
-        cara.setColor(TARJETA);
-        android.graphics.drawable.LayerDrawable l = new android.graphics.drawable.LayerDrawable(
-                new android.graphics.drawable.Drawable[]{sombra, luz, cara});
-        int a = dp(3), b = dp(2);
-        l.setLayerInset(0, a, a, 0, 0);
-        l.setLayerInset(1, 0, 0, a, a);
-        l.setLayerInset(2, b, b, b, b);
-        return l;
+        GradientDrawable g = new GradientDrawable();
+        g.setShape(GradientDrawable.OVAL);
+        g.setColor(TARJETA);
+        g.setStroke(dp(1), BORDE);
+        return g;
     }
+
 
     protected GradientDrawable redondo(int fondo, int borde, int radioDp) {
         GradientDrawable g = new GradientDrawable();

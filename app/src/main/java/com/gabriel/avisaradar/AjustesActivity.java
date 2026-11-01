@@ -39,11 +39,13 @@ public class AjustesActivity extends Pantalla {
         // Cabecera con botón de volver
         LinearLayout cabecera = new LinearLayout(this);
         cabecera.setGravity(Gravity.CENTER_VERTICAL);
-        TextView volver = texto("←", 24, TEXTO, true);
-        volver.setPadding(dp(4), dp(4), dp(16), dp(4));
+        android.widget.FrameLayout volver = botonIcono(R.drawable.ic_chevron, TEXTO, 20, relieveOval());
+        volver.setContentDescription("Volver");
         pulsable(volver, v -> finish());
-        cabecera.addView(volver);
-        cabecera.addView(texto("Ajustes", 24, TEXTO, true));
+        cabecera.addView(volver, new LinearLayout.LayoutParams(dp(46), dp(46)));
+        TextView titulo = texto("Ajustes", 24, TEXTO, true);
+        titulo.setPadding(dp(14), 0, 0, 0);
+        cabecera.addView(titulo);
         col.addView(cabecera);
 
         // ---------- Avisos ----------
@@ -55,7 +57,7 @@ public class AjustesActivity extends Pantalla {
         marcarChips(chipsTipo, Ajustes.tipoAviso(this));
         espacio(avisos, 10);
         avisos.addView(separador());
-        Switch solo = interruptor("Solo si me paso del límite", Ajustes.soloSiMePaso(this));
+        Switch solo = interruptor("Solo con exceso de velocidad", Ajustes.soloSiMePaso(this));
         solo.setOnCheckedChangeListener((b, si) -> Ajustes.setSoloSiMePaso(this, si));
         avisos.addView(solo);
         col.addView(avisos);
@@ -63,8 +65,8 @@ public class AjustesActivity extends Pantalla {
         // ---------- Distancias de los radares ----------
         col.addView(seccion("Distancias de los radares"));
         LinearLayout dist = tarjeta();
-        TextView expl = texto("Toca los metros para cambiarlos. En cada distancia elige si suena con voz, "
-                + "solo si te pasas, o en silencio (solo notificación).", 12, SUB, false);
+        TextView expl = texto("Toca los metros para cambiarlos. En cada distancia elige: Voz (siempre), "
+                + "Exceso (solo con exceso de velocidad) o Silencio (solo notificación).", 12, SUB, false);
         expl.setPadding(0, 0, 0, dp(6));
         dist.addView(expl);
         int[] d = Ajustes.distancias(this);
@@ -78,7 +80,7 @@ public class AjustesActivity extends Pantalla {
             metrosDist[i].setTextColor(VERDE);
             pulsable(metrosDist[i], v -> editarMetros(pos));
             f.addView(metrosDist[i], new LinearLayout.LayoutParams(dp(64), dp(36)));
-            LinearLayout chips = filaChips(new String[]{"Voz", "Si paso", "Silencio"}, chipsDist[i], 62,
+            LinearLayout chips = filaChips(new String[]{"Voz", "Exceso", "Silencio"}, chipsDist[i], 62,
                     modo -> {
                         Ajustes.setModoDistancia(this, pos, modo);
                         reiniciarSiActivo();

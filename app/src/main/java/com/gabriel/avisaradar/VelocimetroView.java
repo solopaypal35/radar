@@ -4,49 +4,61 @@ import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
-import android.graphics.RectF;
 import android.graphics.Typeface;
 import android.view.View;
 
 /**
- * Velocímetro circular: arco de fondo hundido, arco cian que crece con la velocidad,
- * velocidad en el centro, señal del límite y una línea de estado según la pestaña elegida.
+ * Velocímetro: semicírculo de puntos que se encienden con la velocidad
+ * y la velocidad escrita con números de puntos (como un marcador LED).
  */
 public class VelocimetroView extends View {
 
     public static final int MODO_RADARES = 0, MODO_TRAMOS = 1, MODO_TRAFICO = 2, MODO_PEAJES = 3;
     public int modo = MODO_RADARES;
 
-    static final float INICIO = 135f, BARRIDO = 270f; // arco de 270°, abierto por abajo
     static final int VELOCIDAD_MAX = 160;
+    static final int PUNTOS_ARCO = 29;
 
-    private final Paint pista = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint arco = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint relleno = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint numero = new Paint(Paint.ANTI_ALIAS_FLAG);
+    /** Dígitos de 5×7 puntos. */
+    static final String[][] DIGITOS = {
+            {"01110", "10001", "10011", "10101", "11001", "10001", "01110"}, // 0
+            {"00100", "01100", "00100", "00100", "00100", "00100", "01110"}, // 1
+            {"01110", "10001", "00001", "00010", "00100", "01000", "11111"}, // 2
+            {"11110", "00001", "00001", "01110", "00001", "00001", "11110"}, // 3
+            {"00010", "00110", "01010", "10010", "11111", "00010", "00010"}, // 4
+            {"11111", "10000", "11110", "00001", "00001", "10001", "01110"}, // 5
+            {"00110", "01000", "10000", "11110", "10001", "10001", "01110"}, // 6
+            {"11111", "00001", "00010", "00100", "01000", "01000", "01000"}, // 7
+            {"01110", "10001", "10001", "01110", "10001", "10001", "01110"}, // 8
+            {"01110", "10001", "10001", "01111", "00001", "00010", "01100"}, // 9
+            {"00000", "00000", "00000", "11111", "00000", "00000", "00000"}  // -
+    };
+
+    private final Paint punto = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint texto = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final Paint senal = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final RectF caja = new RectF();
-    private float mostrada = 0; // velocidad animada (suaviza los saltos del GPS)
-    private final long inicio = System.currentTimeMillis();
+    private float mostrada = 0;
 
     public VelocimetroView(Context c) {
         super(c);
-        pista.setStyle(Paint.Style.STROKE);
-        pista.setStrokeCap(Paint.Cap.ROUND);
-        arco.setStyle(Paint.Style.STROKE);
-        arco.setStrokeCap(Paint.Cap.ROUND);
-        numero.setTextAlign(Paint.Align.CENTER);
-        numero.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
         texto.setTextAlign(Paint.Align.CENTER);
-        senal.setTextAlign(Paint.Align.CENTER);
-        senal.setTypeface(Typeface.DEFAULT_BOLD);
+        texto.setTypeface(Typeface.DEFAULT);
     }
 
     @Override
     protected void onMeasure(int wSpec, int hSpec) {
         int w = MeasureSpec.getSize(wSpec);
-        setMeasuredDimension(w, (int) (w * 0.92f));
+        setMeasuredDimension(w, (int) (w * 0.62f));
+    }
+
+    /** Color según el estado: turquesa normal, ámbar con algo delante, rojo si te pasas. */
+    static int colorEstado() {
+        if (!RadarService.activo) return Pantalla.SUB;
+        int lim = RadarService.limiteMostrado();
+        boolean exceso = RadarService.exceso
+                || (RadarService.hayGps && lim > 0 && RadarService.velocidad > lim + 3);
+        if (exceso) return Pantalla.ROJO;
+        if (RadarService.distancia >= 0 || RadarService.enTramo) return Pantalla.AMBAR;
+        return Pantalla.VERDE;
     }
 
     @Override
@@ -54,125 +66,49 @@ public class VelocimetroView extends View {
         super.onDraw(c);
         float d = getResources().getDisplayMetrics().density;
         float w = getWidth(), h = getHeight();
-        float cx = w / 2f, cy = h * 0.47f;
-        float r = Math.min(w, h) * 0.38f;
-        float grosor = 16 * d;
-        float t = (System.currentTimeMillis() - inicio) / 1000f;
-
         boolean activo = RadarService.activo, gps = RadarService.hayGps;
-        int lim = RadarService.limiteMostrado();
-        boolean exceso = RadarService.exceso || (activo && gps && lim > 0 && RadarService.velocidad > lim + 3);
-        int color = !activo ? Pantalla.SUB : exceso ? Pantalla.ROJO
-                : (RadarService.distancia >= 0 || RadarService.enTramo) ? Pantalla.AMBAR : Pantalla.VERDE;
+        int color = colorEstado();
 
-        // Velocidad animada hacia la real
         float objetivo = activo && gps ? RadarService.velocidad : 0;
         mostrada += (objetivo - mostrada) * 0.15f;
 
-        // Disco central
-        relleno.setColor(Pantalla.FONDO);
-        c.drawCircle(cx, cy, r + grosor, relleno);
-
-        // Pista hundida
-        caja.set(cx - r, cy - r, cx + r, cy + r);
-        pista.setColor(Pantalla.HUNDIDO);
-        pista.setStrokeWidth(grosor);
-        c.drawArc(caja, INICIO, BARRIDO, false, pista);
-
-        // Arco de velocidad (late un poco si vas rápido)
-        float frac = Math.min(1f, mostrada / VELOCIDAD_MAX);
-        if (frac > 0.005f) {
-            arco.setColor(color);
-            arco.setStrokeWidth(grosor * (exceso ? 1f + 0.08f * (float) Math.abs(Math.sin(t * 6)) : 1f));
-            c.drawArc(caja, INICIO, BARRIDO * frac, false, arco);
-            double ang = Math.toRadians(INICIO + BARRIDO * frac);
-            relleno.setColor(Color.WHITE);
-            c.drawCircle(cx + r * (float) Math.cos(ang), cy + r * (float) Math.sin(ang), grosor * 0.38f, relleno);
+        // Semicírculo de puntos (de izquierda a derecha por arriba)
+        float cx = w / 2f, cy = h * 0.86f;
+        float r = Math.min(w / 2f - 10 * d, h * 0.80f);
+        int encendidos = Math.round(Math.min(1f, mostrada / VELOCIDAD_MAX) * PUNTOS_ARCO);
+        for (int i = 0; i < PUNTOS_ARCO; i++) {
+            double a = Math.toRadians(180 + 180.0 * i / (PUNTOS_ARCO - 1));
+            float x = cx + r * (float) Math.cos(a), y = cy + r * (float) Math.sin(a);
+            punto.setColor(i < encendidos ? color : Pantalla.HUNDIDO);
+            c.drawCircle(x, y, (i < encendidos ? 4.2f : 3.4f) * d, punto);
         }
 
-        // Marca del límite sobre la pista
-        if (activo && lim > 0 && lim <= VELOCIDAD_MAX) {
-            double a = Math.toRadians(INICIO + BARRIDO * lim / (float) VELOCIDAD_MAX);
-            float x1 = cx + (r - grosor * 0.9f) * (float) Math.cos(a), y1 = cy + (r - grosor * 0.9f) * (float) Math.sin(a);
-            float x2 = cx + (r + grosor * 0.9f) * (float) Math.cos(a), y2 = cy + (r + grosor * 0.9f) * (float) Math.sin(a);
-            Paint marca = new Paint(Paint.ANTI_ALIAS_FLAG);
-            marca.setColor(0xFFE0262F);
-            marca.setStrokeWidth(3 * d);
-            c.drawLine(x1, y1, x2, y2, marca);
-        }
-
-        // Centro
-        relleno.setColor(Pantalla.TARJETA);
-        c.drawCircle(cx, cy, r * 0.62f, relleno);
-        numero.setColor(exceso ? Pantalla.ROJO : Pantalla.TEXTO);
-        numero.setTextSize(r * 0.5f);
-        c.drawText(activo && gps ? String.valueOf(Math.round(mostrada)) : "--", cx, cy + r * 0.12f, numero);
-        texto.setColor(Pantalla.SUB);
-        texto.setTextSize(11 * d);
-        texto.setTypeface(Typeface.DEFAULT);
-        c.drawText("KM/H", cx, cy + r * 0.32f, texto);
-
-        // Señal de límite arriba a la derecha
-        if (activo && lim > 0) {
-            float sr = 22 * d, sx = w - sr - 4 * d, sy = sr + 4 * d;
-            senal.setStyle(Paint.Style.FILL);
-            senal.setColor(Color.WHITE);
-            c.drawCircle(sx, sy, sr, senal);
-            senal.setStyle(Paint.Style.STROKE);
-            senal.setStrokeWidth(4.5f * d);
-            senal.setColor(0xFFE0262F);
-            c.drawCircle(sx, sy, sr - 2.3f * d, senal);
-            senal.setStyle(Paint.Style.FILL);
-            senal.setColor(Color.BLACK);
-            senal.setTextSize(sr * (lim >= 100 ? 0.72f : 0.88f));
-            c.drawText(String.valueOf(lim), sx, sy + sr * 0.31f, senal);
-        }
-
-        // Línea de estado bajo el velocímetro, según la pestaña
-        String linea;
-        int colorLinea = Pantalla.VERDE;
-        if (!activo) {
-            linea = "Avisos parados";
-            colorLinea = Pantalla.SUB;
-        } else if (!gps) {
-            linea = "Buscando GPS…";
-            colorLinea = Pantalla.SUB;
-        } else {
-            switch (modo) {
-                case MODO_TRAMOS:
-                    if (RadarService.enTramo) {
-                        int m = RadarService.mediaTramo;
-                        boolean pasado = RadarService.limiteTramo > 0 && m > RadarService.limiteTramo;
-                        linea = "Tramo · media " + (m > 0 ? m + " km/h" : "--");
-                        colorLinea = pasado ? Pantalla.ROJO : Pantalla.AMBAR;
-                    } else {
-                        linea = "Fuera de tramo";
-                    }
-                    break;
-                case MODO_TRAFICO:
-                    String inc = RadarService.incidenciaTexto;
-                    linea = inc != null ? inc : "Sin incidencias delante";
-                    if (inc != null) colorLinea = Pantalla.AMBAR;
-                    break;
-                case MODO_PEAJES:
-                    String p = RadarService.peajeTexto;
-                    linea = p != null ? p : "Sin peajes cerca";
-                    break;
-                default:
-                    int dist = RadarService.distancia;
-                    if (dist >= 0) {
-                        linea = (exceso ? "¡Reduce! " : "") + "Radar a " + (Math.round(dist / 10f) * 10) + " m";
-                        colorLinea = exceso ? Pantalla.ROJO : Pantalla.AMBAR;
-                    } else {
-                        linea = "Vía libre";
-                    }
-                    break;
+        // Velocidad en números de puntos, centrada
+        String v = activo && gps ? String.valueOf(Math.round(mostrada)) : "--";
+        float paso = Math.min(r * 0.075f, 9.5f * d);   // separación entre puntos
+        float radio = paso * 0.36f;
+        float anchoDigito = 5 * paso, hueco = paso * 1.2f;
+        float ancho = v.length() * anchoDigito + (v.length() - 1) * hueco;
+        float x0 = cx - ancho / 2f + paso / 2f;
+        float y0 = cy - r * 0.62f;
+        int colorNum = color == Pantalla.ROJO ? Pantalla.ROJO : Color.WHITE;
+        for (int k = 0; k < v.length(); k++) {
+            char ch = v.charAt(k);
+            String[] g = DIGITOS[ch == '-' ? 10 : ch - '0'];
+            for (int fila = 0; fila < 7; fila++) {
+                for (int col = 0; col < 5; col++) {
+                    boolean on = g[fila].charAt(col) == '1';
+                    if (!on) continue;
+                    punto.setColor(colorNum);
+                    c.drawCircle(x0 + k * (anchoDigito + hueco) + col * paso, y0 + fila * paso, radio, punto);
+                }
             }
         }
-        texto.setColor(colorLinea);
-        texto.setTextSize(17 * d);
-        texto.setTypeface(Typeface.create("sans-serif-medium", Typeface.BOLD));
-        c.drawText(linea, cx, h - 12 * d, texto);
+
+        // Unidad bajo los números
+        texto.setColor(Pantalla.SUB);
+        texto.setTextSize(12 * d);
+        c.drawText("km/h", cx, y0 + 7 * paso + 16 * d, texto);
 
         postInvalidateOnAnimation();
     }

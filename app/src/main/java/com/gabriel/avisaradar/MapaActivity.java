@@ -246,13 +246,21 @@ public class MapaActivity extends Activity {
         mapa.invalidate();
     }
 
+    /**
+     * Tu posición es el emoji 🚗 del móvil. El emoji mira hacia la izquierda, así que se gira
+     * para que mire hacia arriba; luego el mapa lo gira según tu dirección de marcha.
+     */
     private android.graphics.Bitmap cocheBitmap() {
-        android.graphics.drawable.Drawable d = getDrawable(R.drawable.ic_coche);
-        int w = dp(30), h = dp(45);
-        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888);
+        int t = dp(44);
+        android.graphics.Bitmap b = android.graphics.Bitmap.createBitmap(t, t, android.graphics.Bitmap.Config.ARGB_8888);
         android.graphics.Canvas c = new android.graphics.Canvas(b);
-        d.setBounds(0, 0, w, h);
-        d.draw(c);
+        Paint p = new Paint(Paint.ANTI_ALIAS_FLAG);
+        p.setTextSize(dp(34));
+        p.setTextAlign(Paint.Align.CENTER);
+        Paint.FontMetrics fm = p.getFontMetrics();
+        float y = t / 2f - (fm.ascent + fm.descent) / 2f; // centrado vertical exacto
+        c.rotate(90, t / 2f, t / 2f);
+        c.drawText("\uD83D\uDE97", t / 2f, y, p);
         return b;
     }
 
