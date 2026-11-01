@@ -19,14 +19,17 @@ import android.widget.Toast;
 /** Colores y piezas de interfaz comunes a todas las pantallas de la app. */
 public class Pantalla extends Activity {
 
-    static final int FONDO = 0xFF0B1220;
-    static final int TARJETA = 0xFF16213A;
-    static final int BORDE = 0xFF24324F;
-    static final int TEXTO = 0xFFE8EEF8;
-    static final int SUB = 0xFF8A9BB8;
-    static final int VERDE = 0xFF2EE6A6;
+    // Paleta: gris carbón con acentos cian
+    static final int FONDO = 0xFF2B2F36;
+    static final int TARJETA = 0xFF30353D;
+    static final int BORDE = 0xFF3A4049;      // luz del relieve y separadores
+    static final int SOMBRA = 0xFF1D2025;     // sombra del relieve
+    static final int HUNDIDO = 0xFF1E2227;    // fondo de interruptores apagados
+    static final int TEXTO = 0xFFE9EDF2;
+    static final int SUB = 0xFF8C95A1;
+    static final int VERDE = 0xFF18C2E0;      // color de acento (cian)
     static final int AMBAR = 0xFFFFB020;
-    static final int AMBAR_FONDO = 0xFF3A2A08;
+    static final int AMBAR_FONDO = 0xFF3A2F14;
     static final int ROJO = 0xFFFF4D5E;
 
     protected final Handler handler = new Handler(Looper.getMainLooper());
@@ -55,18 +58,40 @@ public class Pantalla extends Activity {
 
     /** Título pequeño de sección, en gris y mayúsculas. */
     protected TextView seccion(String s) {
-        TextView t = texto(s.toUpperCase(), 12, SUB, true);
-        t.setLetterSpacing(0.08f);
-        t.setPadding(dp(6), dp(22), 0, dp(8));
+        TextView t = texto(s, 16, VERDE, true);
+        t.setPadding(dp(4), dp(22), 0, dp(10));
         return t;
     }
 
     protected LinearLayout tarjeta() {
         LinearLayout t = new LinearLayout(this);
         t.setOrientation(LinearLayout.VERTICAL);
-        t.setPadding(dp(16), dp(14), dp(16), dp(14));
-        t.setBackground(redondo(TARJETA, BORDE, 16));
+        t.setBackground(relieve(18));
+        t.setPadding(dp(20), dp(18), dp(20), dp(18));
         return t;
+    }
+
+    /**
+     * Fondo «con relieve»: una sombra oscura abajo a la derecha y una luz arriba a la izquierda,
+     * como las tarjetas del diseño. Deja un pequeño margen para que se vean.
+     */
+    protected android.graphics.drawable.Drawable relieve(int radioDp) {
+        GradientDrawable sombra = new GradientDrawable();
+        sombra.setColor(SOMBRA);
+        sombra.setCornerRadius(dp(radioDp));
+        GradientDrawable luz = new GradientDrawable();
+        luz.setColor(BORDE);
+        luz.setCornerRadius(dp(radioDp));
+        GradientDrawable cara = new GradientDrawable();
+        cara.setColor(TARJETA);
+        cara.setCornerRadius(dp(radioDp));
+        android.graphics.drawable.LayerDrawable l = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{sombra, luz, cara});
+        int a = dp(4), b = dp(2);
+        l.setLayerInset(0, a, a, 0, 0);
+        l.setLayerInset(1, 0, 0, a, a);
+        l.setLayerInset(2, b, b, b, b);
+        return l;
     }
 
     /** Línea fina para separar filas dentro de una tarjeta. */
@@ -98,13 +123,17 @@ public class Pantalla extends Activity {
         s.setTextSize(15);
         s.setChecked(activado);
         s.setPadding(0, dp(12), 0, dp(12));
+        int[][] estados = {{android.R.attr.state_checked}, {}};
+        s.setThumbTintList(new android.content.res.ColorStateList(estados, new int[]{0xFFFFFFFF, 0xFFDDE2E8}));
+        s.setTrackTintList(new android.content.res.ColorStateList(estados, new int[]{VERDE, HUNDIDO}));
+        s.setTrackTintMode(android.graphics.PorterDuff.Mode.SRC);
         return s;
     }
 
     protected TextView botonPequeno(String s) {
         TextView b = texto(s, 14, TEXTO, true);
         b.setGravity(Gravity.CENTER);
-        b.setBackground(redondo(TARJETA, BORDE, 25));
+        b.setBackground(relieve(24));
         return b;
     }
 
@@ -112,8 +141,8 @@ public class Pantalla extends Activity {
     protected void marcarChips(TextView[] chips, int elegido) {
         for (int i = 0; i < chips.length; i++) {
             boolean si = i == elegido;
-            chips[i].setBackground(redondo(si ? VERDE : TARJETA, si ? VERDE : BORDE, 18));
-            chips[i].setTextColor(si ? FONDO : TEXTO);
+            chips[i].setBackground(si ? redondo(VERDE, VERDE, 18) : relieve(18));
+            chips[i].setTextColor(si ? 0xFFFFFFFF : SUB);
         }
     }
 
@@ -135,6 +164,33 @@ public class Pantalla extends Activity {
             f.addView(chip, lp);
         }
         return f;
+    }
+
+    /** Botón redondo con relieve (para iconos). */
+    protected TextView botonRedondo(String simbolo, int sp) {
+        TextView t = texto(simbolo, sp, SUB, false);
+        t.setGravity(Gravity.CENTER);
+        t.setBackground(relieveOval());
+        return t;
+    }
+
+    protected android.graphics.drawable.Drawable relieveOval() {
+        GradientDrawable sombra = new GradientDrawable();
+        sombra.setShape(GradientDrawable.OVAL);
+        sombra.setColor(SOMBRA);
+        GradientDrawable luz = new GradientDrawable();
+        luz.setShape(GradientDrawable.OVAL);
+        luz.setColor(BORDE);
+        GradientDrawable cara = new GradientDrawable();
+        cara.setShape(GradientDrawable.OVAL);
+        cara.setColor(TARJETA);
+        android.graphics.drawable.LayerDrawable l = new android.graphics.drawable.LayerDrawable(
+                new android.graphics.drawable.Drawable[]{sombra, luz, cara});
+        int a = dp(3), b = dp(2);
+        l.setLayerInset(0, a, a, 0, 0);
+        l.setLayerInset(1, 0, 0, a, a);
+        l.setLayerInset(2, b, b, b, b);
+        return l;
     }
 
     protected GradientDrawable redondo(int fondo, int borde, int radioDp) {

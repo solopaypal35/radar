@@ -54,6 +54,8 @@ public class RadarService extends Service implements LocationListener {
     public static volatile int limiteTramo = 0;
     // Límite de la carretera por la que vas (OpenStreetMap)
     public static volatile int limiteVia = 0;
+    // Próximo peaje delante (para la pestaña «Peajes» de la pantalla principal)
+    public static volatile String peajeTexto = null;
 
     /** Límite que se enseña en pantalla: el del radar cercano, el del tramo o el de la vía. */
     public static int limiteMostrado() {
@@ -117,6 +119,24 @@ public class RadarService extends Service implements LocationListener {
         tts = new TextToSpeech(this, estado -> {
             if (estado == TextToSpeech.SUCCESS) {
                 tts.setLanguage(new Locale("es", "ES"));
+                tts.setAudioAttributes(atributosAviso());
+                tts.setOnUtteranceProgressListener(new android.speech.tts.UtteranceProgressListener() {
+                    @Override
+                    public void onStart(String id) {
+                    }
+
+                    @Override
+                    public void onDone(String id) {
+                        frasePendientes--;
+                        if (frasePendientes <= 0) soltarFoco();
+                    }
+
+                    @Override
+                    public void onError(String id) {
+                        frasePendientes--;
+                        if (frasePendientes <= 0) soltarFoco();
+                    }
+                });
                 ttsListo = true;
             }
         });
@@ -186,6 +206,7 @@ public class RadarService extends Service implements LocationListener {
         mediaTramo = 0;
         limiteTramo = 0;
         limiteVia = 0;
+        peajeTexto = null;
         activo = false;
         hayGps = false;
         velocidad = 0;
@@ -197,6 +218,7 @@ public class RadarService extends Service implements LocationListener {
         if (lm != null) lm.removeUpdates(this);
         if (wakeLock != null && wakeLock.isHeld()) wakeLock.release();
         if (tts != null) tts.shutdown();
+        soltarFoco();
         if (tono != null) tono.release();
         stopForeground(STOP_FOREGROUND_REMOVE);
         super.onDestroy();
@@ -403,6 +425,22 @@ public class RadarService extends Service implements LocationListener {
         }
     }
 
+    private String proximoPeaje(Location loc, boolean hayRumbo, float rumbo) {
+        float[] res = new float[2];
+        PuntosDB.Punto mejor = null;
+        float dMejor = 5000;
+        for (PuntosDB.Punto p : peajes) {
+            Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), p.lat, p.lon, res);
+            if (res[0] >= dMejor) continue;
+            if (hayRumbo && angulo(rumbo, res[1]) > 40) continue;
+            dMejor = res[0];
+            mejor = p;
+        }
+        if (mejor == null) return null;
+        return "Peaje a " + distanciaHablada(dMejor).replace(" kilómetros", " km").replace(" kilómetro", " km")
+                .replace(" metros", " m") + (mejor.precio.isEmpty() ? "" : " · " + mejor.precio.replace(" euros", " €"));
+    }
+
     // ---------- Dónde he aparcado ----------
 
     private void guardarAparcamientoAuto() {
@@ -452,6 +490,7 @@ public class RadarService extends Service implements LocationListener {
             revisarPuntos(semaforos, 200, loc, hayRumbo, rumbo, false);
             revisarPuntos(peajes, 1000, loc, hayRumbo, rumbo, true);
         }
+        peajeTexto = proximoPeaje(loc, hayRumbo, rumbo);
         maxVelocidad = Math.max(maxVelocidad, kmh);
 
         // Estado para la pantalla
@@ -551,7 +590,51 @@ public class RadarService extends Service implements LocationListener {
         getSystemService(NotificationManager.class).notify(id, n);
     }
 
+    // ---------- Foco de audio: la música baja de volumen mientras se avisa ----------
+
+    private android.media.AudioFocusRequest foco;
+    private volatile int frasePendientes = 0;
+    private final android.os.Handler manejador = new android.os.Handler(android.os.Looper.getMainLooper());
+    private final Runnable soltar = () -> {
+        if (frasePendientes <= 0) soltarFoco();
+    };
+
+    static android.media.AudioAttributes atributosAviso() {
+        return new android.media.AudioAttributes.Builder()
+                .setUsage(android.media.AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+                .setContentType(android.media.AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build();
+    }
+
+    /** Pide a Android que baje la música (sin pararla) mientras suena el aviso. */
+    private void pedirFoco() {
+        manejador.removeCallbacks(soltar);
+        if (foco == null) {
+            foco = new android.media.AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(atributosAviso())
+                    .setOnAudioFocusChangeListener(c -> {
+                    })
+                    .build();
+        }
+        try {
+            getSystemService(AudioManager.class).requestAudioFocus(foco);
+        } catch (Exception ignored) {
+        }
+    }
+
+    /** La música vuelve a su volumen normal. */
+    private void soltarFoco() {
+        if (foco == null) return;
+        try {
+            getSystemService(AudioManager.class).abandonAudioFocusRequest(foco);
+        } catch (Exception ignored) {
+        }
+    }
+
     private void pitar() {
+        pedirFoco();
+        // Si solo hay pitido, se suelta el foco poco después; si luego hay voz, se suelta al acabar de hablar
+        manejador.postDelayed(soltar, 900);
         if (tono != null) {
             try {
                 tono.startTone(ToneGenerator.TONE_PROP_BEEP2, 400);
@@ -562,6 +645,8 @@ public class RadarService extends Service implements LocationListener {
 
     private void hablar(String frase) {
         if (ttsListo) {
+            pedirFoco();
+            frasePendientes++;
             tts.speak(frase, TextToSpeech.QUEUE_ADD, null, "aviso" + System.nanoTime());
         }
     }

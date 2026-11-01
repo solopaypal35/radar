@@ -38,7 +38,10 @@ public class MainActivity extends Pantalla {
     /** A partir de cuántos días se avisa de que hay que actualizar los radares. */
     static final int DIAS_ACTUALIZAR = 30;
 
-    private TextView botonActivar, botonMapa, aparcTexto;
+    private TextView botonActivar, etiquetaActivar, estadoCabecera, aparcTexto;
+    private TextView estadoMapa, estadoBurbuja;
+    private Switch interMapa, interBurbuja;
+    private VelocimetroView velocimetro;
     private double aparcLatMostrada = Double.NaN;
     private ImageView fotoAparc;
     private String fotoMostrada = null;
@@ -65,56 +68,52 @@ public class MainActivity extends Pantalla {
         col.setOrientation(LinearLayout.VERTICAL);
         col.setPadding(dp(18), dp(20), dp(18), dp(28));
 
-        // Cabecera con logo
+        // Cabecera: saludo, fecha y estado, y botón de ajustes
         LinearLayout cabecera = new LinearLayout(this);
         cabecera.setGravity(Gravity.CENTER_VERTICAL);
-        ImageView logo = new ImageView(this);
-        logo.setImageResource(R.drawable.ic_logo);
-        logo.setBackground(redondo(FONDO, BORDE, 14));
-        cabecera.addView(logo, new LinearLayout.LayoutParams(dp(48), dp(48)));
         LinearLayout titulos = new LinearLayout(this);
         titulos.setOrientation(LinearLayout.VERTICAL);
-        titulos.setPadding(dp(12), 0, 0, 0);
-        TextView titulo = texto("AvisaRadar", 24, TEXTO, true);
-        titulos.addView(titulo);
-        titulos.addView(texto("Avisos de radares y tráfico", 13, SUB, false));
+        titulos.addView(texto("¡Hola, Gabriel!", 20, TEXTO, true));
+        estadoCabecera = texto("", 13, SUB, false);
+        titulos.addView(estadoCabecera);
         cabecera.addView(titulos, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        TextView ajustes = texto("⚙", 22, TEXTO, false);
-        ajustes.setGravity(Gravity.CENTER);
-        ajustes.setBackground(redondo(TARJETA, BORDE, 24));
+        TextView ajustes = botonRedondo("⚙", 20);
         ajustes.setContentDescription("Ajustes");
         pulsable(ajustes, v -> startActivity(new Intent(this, AjustesActivity.class)));
-        cabecera.addView(ajustes, new LinearLayout.LayoutParams(dp(48), dp(48)));
+        cabecera.addView(ajustes, new LinearLayout.LayoutParams(dp(50), dp(50)));
         col.addView(cabecera);
 
-        // Radar animado
-        RadarView radar = new RadarView(this);
-        LinearLayout.LayoutParams lpRadar = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        lpRadar.topMargin = dp(12);
-        col.addView(radar, lpRadar);
-
-        // Botón principal
-        botonActivar = texto("Activar avisos", 19, FONDO, true);
+        // Velocímetro con el botón de encendido debajo
+        LinearLayout panel = tarjeta();
+        panel.setGravity(Gravity.CENTER_HORIZONTAL);
+        panel.setPadding(dp(14), dp(16), dp(14), dp(20));
+        velocimetro = new VelocimetroView(this);
+        panel.addView(velocimetro, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        botonActivar = texto("⏻", 28, 0xFFFFFFFF, true);
         botonActivar.setGravity(Gravity.CENTER);
-        botonActivar.setBackground(redondo(VERDE, VERDE, 30));
+        botonActivar.setContentDescription("Activar o parar avisos");
         pulsable(botonActivar, v -> alternar());
-        LinearLayout.LayoutParams lpBoton = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(62));
-        lpBoton.topMargin = dp(8);
-        col.addView(botonActivar, lpBoton);
+        LinearLayout.LayoutParams lpBoton = new LinearLayout.LayoutParams(dp(72), dp(72));
+        lpBoton.topMargin = dp(10);
+        panel.addView(botonActivar, lpBoton);
+        etiquetaActivar = texto("", 13, SUB, false);
+        etiquetaActivar.setPadding(0, dp(8), 0, 0);
+        panel.addView(etiquetaActivar);
+        col.addView(panel, margenArriba(16));
 
-        // Botón del mapa (solo si la opción está activada)
-        botonMapa = texto("Abrir mapa", 16, VERDE, true);
-        botonMapa.setGravity(Gravity.CENTER);
-        botonMapa.setBackground(redondo(TARJETA, VERDE, 26));
-        pulsable(botonMapa, v -> startActivity(new Intent(this, MapaActivity.class)));
-        LinearLayout.LayoutParams lpMapa = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(52));
-        lpMapa.topMargin = dp(10);
-        col.addView(botonMapa, lpMapa);
+        // Pestañas: qué enseña la línea de estado del velocímetro
+        android.widget.HorizontalScrollView pestanas = new android.widget.HorizontalScrollView(this);
+        pestanas.setHorizontalScrollBarEnabled(false);
+        TextView[] chips = new TextView[4];
+        LinearLayout filaPestanas = filaChips(new String[]{"Radares", "Tramos", "Tráfico", "Peajes"},
+                chips, 92, pos -> velocimetro.modo = pos);
+        filaPestanas.setPadding(dp(2), dp(4), dp(2), dp(4));
+        marcarChips(chips, 0);
+        pestanas.addView(filaPestanas);
+        col.addView(pestanas, margenArriba(16));
 
-        // Tarjeta de radares (se pone naranja cuando toca actualizar)
+        // Aviso naranja: radares sin actualizar (solo aparece cuando toca)
         tarjetaRadares = tarjeta();
         LinearLayout filaRadares = new LinearLayout(this);
         filaRadares.setGravity(Gravity.CENTER_VERTICAL);
@@ -130,82 +129,120 @@ public class MainActivity extends Pantalla {
         filaRadares.addView(radaresAccion);
         tarjetaRadares.addView(filaRadares);
         pulsable(tarjetaRadares, v -> actualizar());
-        col.addView(tarjetaRadares, margenArriba(12));
+        col.addView(tarjetaRadares, margenArriba(14));
 
-        // Tarjeta de batería (solo aparece si Android puede cerrar la app)
+        // Aviso naranja: batería (solo aparece si Android puede cerrar la app)
         tarjetaBateria = tarjeta();
-        tarjetaBateria.setBackground(redondo(AMBAR_FONDO, AMBAR, 16));
+        tarjetaBateria.setBackground(redondo(AMBAR_FONDO, AMBAR, 18));
         tarjetaBateria.addView(texto("Permite que funcione siempre", 16, AMBAR, true));
-        TextView expl = texto("Android puede cerrar AvisaRadar en viajes largos para ahorrar batería, "
-                + "y dejarías de oír los avisos. Toca aquí y pulsa «Permitir».", 13, TEXTO, false);
+        TextView expl = texto("Si no, Android puede cerrar AvisaRadar en viajes largos. Toca aquí y pulsa «Permitir».",
+                13, TEXTO, false);
         expl.setPadding(0, dp(4), 0, 0);
         tarjetaBateria.addView(expl);
         pulsable(tarjetaBateria, v -> pedirSinOptimizar());
-        col.addView(tarjetaBateria, margenArriba(12));
+        col.addView(tarjetaBateria, margenArriba(14));
 
-        // Dónde he aparcado
+        // Cuadrícula: Mapa | Burbuja
+        LinearLayout cuadricula = new LinearLayout(this);
+        LinearLayout tMapa = baldosa(R.drawable.ic_mapa, "Mapa");
+        interMapa = interruptor("", Ajustes.usarMapa(this));
+        estadoMapa = (TextView) ((LinearLayout) tMapa.getChildAt(2)).getChildAt(0);
+        ((LinearLayout) tMapa.getChildAt(2)).addView(interMapa);
+        interMapa.setOnCheckedChangeListener((b2, si) -> {
+            Ajustes.setUsarMapa(this, si);
+            refrescar();
+        });
+        pulsable(tMapa, v -> {
+            if (Ajustes.usarMapa(this)) startActivity(new Intent(this, MapaActivity.class));
+            else toast("Activa el mapa con el interruptor");
+        });
+        LinearLayout tBurbuja = baldosa(R.drawable.ic_burbuja, "Burbuja");
+        interBurbuja = interruptor("", Ajustes.burbuja(this));
+        estadoBurbuja = (TextView) ((LinearLayout) tBurbuja.getChildAt(2)).getChildAt(0);
+        ((LinearLayout) tBurbuja.getChildAt(2)).addView(interBurbuja);
+        interBurbuja.setOnCheckedChangeListener((b2, si) -> {
+            Ajustes.setBurbuja(this, si);
+            if (si && !Burbuja.tienePermiso(this)) {
+                toast("Activa «Mostrar sobre otras apps» para AvisaRadar y vuelve");
+                startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:" + getPackageName())));
+            }
+            reiniciarSiActivo();
+            refrescar();
+        });
+        LinearLayout.LayoutParams lpIzq = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lpIzq.rightMargin = dp(7);
+        LinearLayout.LayoutParams lpDer = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
+        lpDer.leftMargin = dp(7);
+        cuadricula.addView(tMapa, lpIzq);
+        cuadricula.addView(tBurbuja, lpDer);
+        col.addView(cuadricula, margenArriba(16));
+
+        // Aparcamiento
         LinearLayout aparc = tarjeta();
-        aparc.addView(texto("Dónde he aparcado", 16, TEXTO, true));
-        aparcTexto = texto("", 13, SUB, false);
-        aparcTexto.setPadding(0, dp(2), 0, dp(10));
-        aparc.addView(aparcTexto);
+        LinearLayout cabAparc = new LinearLayout(this);
+        cabAparc.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView icAparc = new ImageView(this);
+        icAparc.setImageResource(R.drawable.ic_parking);
+        cabAparc.addView(icAparc, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        LinearLayout textosAparc = new LinearLayout(this);
+        textosAparc.setOrientation(LinearLayout.VERTICAL);
+        textosAparc.setPadding(dp(12), 0, 0, 0);
+        textosAparc.addView(texto("Aparcamiento", 16, TEXTO, true));
+        aparcTexto = texto("", 12, SUB, false);
+        textosAparc.addView(aparcTexto);
+        cabAparc.addView(textosAparc, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        aparc.addView(cabAparc);
         fotoAparc = new ImageView(this);
         fotoAparc.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        fotoAparc.setBackground(redondo(FONDO, BORDE, 12));
+        fotoAparc.setBackground(redondo(HUNDIDO, HUNDIDO, 14));
         fotoAparc.setClipToOutline(true);
         fotoAparc.setVisibility(View.GONE);
         fotoAparc.setOnClickListener(v -> verFoto());
         LinearLayout.LayoutParams lpFoto = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(140));
-        lpFoto.bottomMargin = dp(10);
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(130));
+        lpFoto.topMargin = dp(12);
         aparc.addView(fotoAparc, lpFoto);
         LinearLayout filaAparc = new LinearLayout(this);
-        TextView guardar = botonPequeno("Guardar aquí");
-        pulsable(guardar, v -> guardarAparcamientoManual());
-        TextView llegar = botonPequeno("Cómo llegar");
-        pulsable(llegar, v -> comoLlegar());
-        TextView whatsapp = botonPequeno("WhatsApp");
-        whatsapp.setTextColor(VERDE);
-        iconoApp(whatsapp, "com.whatsapp");
-        pulsable(whatsapp, v -> enviarWhatsApp());
-        TextView foto = botonPequeno("📷");
-        foto.setTextSize(18);
-        pulsable(foto, v -> hacerFoto());
-        filaAparc.addView(guardar, pesoBoton());
-        filaAparc.addView(foto, pesoBoton());
-        filaAparc.addView(llegar, pesoBoton());
-        filaAparc.addView(whatsapp, pesoBoton());
+        filaAparc.setPadding(0, dp(14), 0, 0);
+        filaAparc.addView(botonAccion("📍", "Guardar", v -> guardarAparcamientoManual()), pesoAccion());
+        filaAparc.addView(botonAccion("📷", "Foto", v -> hacerFoto()), pesoAccion());
+        filaAparc.addView(botonAccion("➜", "Ruta", v -> comoLlegar()), pesoAccion());
+        LinearLayout wa = botonAccion("✉", "Enviar", v -> enviarWhatsApp());
+        iconoApp((TextView) wa.getChildAt(0), "com.whatsapp");
+        filaAparc.addView(wa, pesoAccion());
         aparc.addView(filaAparc);
-        col.addView(aparc, margenArriba(12));
+        col.addView(aparc, margenArriba(16));
 
-        // Música (Spotify u otra app que esté sonando)
+        // Música
         LinearLayout musica = tarjeta();
-        musica.addView(texto("Música", 16, TEXTO, true));
+        LinearLayout cabMusica = new LinearLayout(this);
+        cabMusica.setGravity(Gravity.CENTER_VERTICAL);
+        ImageView icMusica = new ImageView(this);
+        icMusica.setImageResource(R.drawable.ic_musica);
+        cabMusica.addView(icMusica, new LinearLayout.LayoutParams(dp(26), dp(26)));
+        TextView tMusica = texto("Música", 16, TEXTO, true);
+        tMusica.setPadding(dp(12), 0, 0, 0);
+        cabMusica.addView(tMusica);
+        musica.addView(cabMusica);
         LinearLayout filaMusica = new LinearLayout(this);
-        filaMusica.setPadding(0, dp(10), 0, 0);
-        TextView ant = botonPequeno("⏮");
-        ant.setTextSize(20);
-        pulsable(ant, v -> Musica.anterior(this));
-        TextView pp = botonPequeno("⏯");
-        pp.setTextSize(20);
-        pulsable(pp, v -> Musica.playPausa(this));
-        TextView sig = botonPequeno("⏭");
-        sig.setTextSize(20);
-        pulsable(sig, v -> Musica.siguiente(this));
-        TextView spotify = botonPequeno("Spotify");
-        spotify.setTextColor(VERDE);
-        iconoApp(spotify, Musica.SPOTIFY);
-        pulsable(spotify, v -> Musica.abrirSpotify(this));
-        filaMusica.addView(ant, pesoBoton());
-        filaMusica.addView(pp, pesoBoton());
-        filaMusica.addView(sig, pesoBoton());
-        filaMusica.addView(spotify, pesoBoton());
+        filaMusica.setPadding(0, dp(14), 0, 0);
+        filaMusica.addView(botonAccion("⏮", null, v -> Musica.anterior(this)), pesoAccion());
+        LinearLayout play = botonAccion("⏯", null, v -> Musica.playPausa(this));
+        ((TextView) play.getChildAt(0)).setBackground(redondo(VERDE, VERDE, 30));
+        ((TextView) play.getChildAt(0)).setTextColor(0xFFFFFFFF);
+        filaMusica.addView(play, pesoAccion());
+        filaMusica.addView(botonAccion("⏭", null, v -> Musica.siguiente(this)), pesoAccion());
+        LinearLayout sp = botonAccion("♫", null, v -> Musica.abrirSpotify(this));
+        iconoApp((TextView) sp.getChildAt(0), Musica.SPOTIFY);
+        filaMusica.addView(sp, pesoAccion());
         musica.addView(filaMusica);
-        col.addView(musica, margenArriba(12));
+        col.addView(musica, margenArriba(16));
 
-        TextView ayuda = texto("Activa los avisos y abre Maps o Waze: AvisaRadar sigue avisando "
-                + "en segundo plano.", 12, SUB, false);
-        ayuda.setPadding(dp(4), dp(18), dp(4), 0);
+        TextView ayuda = texto("Activa los avisos y abre Maps o Waze: AvisaRadar sigue avisando en segundo plano.",
+                12, SUB, false);
+        ayuda.setGravity(Gravity.CENTER);
+        ayuda.setPadding(dp(8), dp(20), dp(8), 0);
         col.addView(ayuda);
 
         ScrollView scroll = new ScrollView(this);
@@ -239,17 +276,27 @@ public class MainActivity extends Pantalla {
 
     private void refrescar() {
         refrescarAparcamiento();
-        botonMapa.setVisibility(Ajustes.usarMapa(this) ? View.VISIBLE : View.GONE);
-        // Botón principal
-        if (RadarService.activo) {
-            botonActivar.setText("Parar avisos");
-            botonActivar.setTextColor(TEXTO);
-            botonActivar.setBackground(redondo(ROJO, ROJO, 30));
+        // Botón de encendido: cian relleno si está activo, con relieve si está parado
+        boolean activo = RadarService.activo;
+        if (activo) {
+            android.graphics.drawable.GradientDrawable g = new android.graphics.drawable.GradientDrawable();
+            g.setShape(android.graphics.drawable.GradientDrawable.OVAL);
+            g.setColor(VERDE);
+            g.setStroke(dp(6), SOMBRA);
+            botonActivar.setBackground(g);
+            botonActivar.setTextColor(0xFFFFFFFF);
+            etiquetaActivar.setText("Avisos activos · toca para parar");
         } else {
-            botonActivar.setText("Activar avisos");
-            botonActivar.setTextColor(FONDO);
-            botonActivar.setBackground(redondo(VERDE, VERDE, 30));
+            botonActivar.setBackground(relieveOval());
+            botonActivar.setTextColor(SUB);
+            etiquetaActivar.setText("Toca para activar los avisos");
         }
+        String fecha = new java.text.SimpleDateFormat("EEEE d MMM", new java.util.Locale("es", "ES"))
+                .format(new java.util.Date());
+        estadoCabecera.setText(Character.toUpperCase(fecha.charAt(0)) + fecha.substring(1)
+                + (activo ? " · Avisos activos" : ""));
+        estadoMapa.setText(Ajustes.usarMapa(this) ? "Toca para abrir" : "Apagado");
+        estadoBurbuja.setText(Ajustes.burbuja(this) ? "Encendida" : "Apagada");
 
         // Tarjeta de batería
         PowerManager pm = (PowerManager) getSystemService(POWER_SERVICE);
@@ -304,6 +351,45 @@ public class MainActivity extends Pantalla {
                 tarjetaRadares.setAlpha(1f);
             }
         }
+    }
+
+    /** Baldosa cuadrada con icono, título y una fila inferior (estado + interruptor). */
+    private LinearLayout baldosa(int icono, String titulo) {
+        LinearLayout t = tarjeta();
+        t.setPadding(dp(18), dp(16), dp(14), dp(10));
+        ImageView ic = new ImageView(this);
+        ic.setImageResource(icono);
+        LinearLayout.LayoutParams lpIc = new LinearLayout.LayoutParams(dp(28), dp(28));
+        t.addView(ic, lpIc);
+        TextView tt = texto(titulo, 16, TEXTO, true);
+        tt.setPadding(0, dp(8), 0, dp(2));
+        t.addView(tt);
+        LinearLayout abajo = new LinearLayout(this);
+        abajo.setGravity(Gravity.CENTER_VERTICAL);
+        TextView estado = texto("", 12, SUB, false);
+        abajo.addView(estado, new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        t.addView(abajo);
+        return t;
+    }
+
+    /** Botón redondo con relieve y, opcionalmente, una etiqueta pequeña debajo. */
+    private LinearLayout botonAccion(String simbolo, String etiqueta, View.OnClickListener l) {
+        LinearLayout c = new LinearLayout(this);
+        c.setOrientation(LinearLayout.VERTICAL);
+        c.setGravity(Gravity.CENTER_HORIZONTAL);
+        TextView b = botonRedondo(simbolo, 18);
+        pulsable(b, l);
+        c.addView(b, new LinearLayout.LayoutParams(dp(52), dp(52)));
+        if (etiqueta != null) {
+            TextView e = texto(etiqueta, 11, SUB, false);
+            e.setPadding(0, dp(4), 0, 0);
+            c.addView(e);
+        }
+        return c;
+    }
+
+    private LinearLayout.LayoutParams pesoAccion() {
+        return new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
     }
 
     static String cuando(int dias) {
