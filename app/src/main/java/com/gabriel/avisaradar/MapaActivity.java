@@ -259,6 +259,25 @@ public class MapaActivity extends Activity {
         mapa.invalidate();
     }
 
+    /** Última posición que guarda Android (GPS o red), para centrar el mapa al abrirlo. */
+    private Location ultimaConocida() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED
+                && checkSelfPermission(Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            return null;
+        }
+        android.location.LocationManager lm = (android.location.LocationManager) getSystemService(LOCATION_SERVICE);
+        Location mejor = null;
+        for (String prov : new String[]{android.location.LocationManager.GPS_PROVIDER,
+                android.location.LocationManager.NETWORK_PROVIDER, android.location.LocationManager.PASSIVE_PROVIDER}) {
+            try {
+                Location l = lm.getLastKnownLocation(prov);
+                if (l != null && (mejor == null || l.getTime() > mejor.getTime())) mejor = l;
+            } catch (Exception ignored) {
+            }
+        }
+        return mejor;
+    }
+
     /**
      * Tu posición es el emoji 🚗 del móvil. El emoji mira hacia la izquierda, así que se gira
      * para que mire hacia arriba; luego el mapa lo gira según tu dirección de marcha.
