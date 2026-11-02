@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Todo va cifrado (HTTPS) salvo las imágenes de cámaras de estas webs públicas, que solo existen en http -->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false" />
+    <domain-config cleartextTrafficPermitted="true">
+        <domain includeSubdomains="true">gencat.cat</domain>
+        <domain includeSubdomains="true">bizkaimove.com</domain>
+        <domain includeSubdomains="true">bilbao.eus</domain>
+        <domain includeSubdomains="true">trafikoa.eus</domain>
+        <domain includeSubdomains="true">trafikoa.net</domain>
+        <domain includeSubdomains="true">vitoria-gasteiz.org</domain>
+    </domain-config>
+</network-security-config>

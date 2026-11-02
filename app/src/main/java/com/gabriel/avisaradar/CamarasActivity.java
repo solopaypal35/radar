@@ -65,7 +65,7 @@ public class CamarasActivity extends Pantalla {
         lista.setOrientation(LinearLayout.VERTICAL);
         col.addView(lista, margenArriba(12));
 
-        TextView creditos = texto("Imágenes: Dirección General de Tráfico. No incluye Cataluña ni País Vasco.",
+        TextView creditos = texto("Imágenes: DGT, Servei Català de Trànsit y Open Data Euskadi (Gobierno Vasco, diputaciones y ayuntamientos).",
                 11, SUB, false);
         creditos.setPadding(dp(6), dp(18), dp(6), 0);
         col.addView(creditos);
