@@ -57,7 +57,9 @@ object Optimizer {
         adb.sh("pm trim-caches 999G")
 
         step("Compilando apps para que abran más rápido.\nPuede tardar varios minutos: no apagues la TV ni cierres la app.")
-        adb.sh("cmd package bg-dexopt-job")
+        adb.runLong("cmd package bg-dexopt-job", "dexopt") { log ->
+            if (log.startsWith("Reconectando")) step(log)
+        }
 
         return restricted
     }
@@ -75,17 +77,30 @@ object Optimizer {
      * No borra datos ni cierra sesión. Devuelve las que se han compilado bien.
      */
     fun boostApps(adb: TvAdb, pkgs: List<String>, step: (String) -> Unit): List<String> {
-        val ok = mutableListOf<String>()
-        pkgs.forEachIndexed { i, p ->
-            step("Acelerando app ${i + 1} de ${pkgs.size}…\n$p\nPuede tardar 1-2 minutos por app. No apagues la TV.")
-            if (adb.sh("cmd package compile -m speed -f $p").contains("Success", true)) ok += p
+        val launcher = "com.google.android.apps.tv.launcherx"
+        val script = "for p in ${(pkgs + launcher).joinToString(" ")}; do echo APP \$p; " +
+            "cmd package compile -m speed -f \$p; done; am kill-all"
+        val out = adb.runLong(script, "boost") { log ->
+            val current = log.lines().lastOrNull { it.startsWith("APP ") }?.removePrefix("APP ")?.trim()
+            val idx = (pkgs + launcher).indexOf(current)
+            step(
+                when {
+                    log.startsWith("Reconectando") -> log
+                    current == launcher -> "Acelerando el inicio de la TV…"
+                    idx >= 0 -> "Acelerando app ${idx + 1} de ${pkgs.size}…\n$current\n" +
+                        "La TV hace el trabajo: aunque el móvil se desconecte, sigue sola."
+                    else -> "Empezando…"
+                }
+            )
         }
-        // El inicio de la TV también se mueve mejor compilado
-        step("Acelerando el inicio de la TV…")
-        adb.sh("cmd package compile -m speed -f com.google.android.apps.tv.launcherx")
-        step("Liberando memoria…")
-        adb.sh("am kill-all")
-        return ok
+        // Qué apps terminaron con «Success»
+        val ok = mutableListOf<String>()
+        var current: String? = null
+        out.lines().forEach { l ->
+            if (l.startsWith("APP ")) current = l.removePrefix("APP ").trim()
+            else if (l.contains("Success", true)) current?.let { if (it in pkgs) ok += it }
+        }
+        return ok.distinct()
     }
 
     fun unboostApps(adb: TvAdb, pkgs: Collection<String>) {

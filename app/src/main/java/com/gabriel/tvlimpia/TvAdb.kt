@@ -79,6 +79,33 @@ class TvAdb(private val ctx: Context) {
         }
     }
 
+    /**
+     * Tareas largas (compilar apps): se lanzan EN LA TV en segundo plano y aquí solo
+     * consultamos cómo van cada pocos segundos. Si el móvil pierde la conexión
+     * (pantalla apagada, Wi-Fi), la TV sigue trabajando y al volver se reanuda el seguimiento.
+     * El script no debe contener comillas simples.
+     */
+    fun runLong(script: String, tag: String, timeoutMin: Int = 40, onProgress: (String) -> Unit): String {
+        val log = "/data/local/tmp/tvl_$tag.log"
+        sh("rm -f $log; setsid nohup sh -c '$script; echo TVL_DONE' > $log 2>&1 < /dev/null &")
+        val end = System.currentTimeMillis() + timeoutMin * 60_000L
+        var fails = 0
+        while (System.currentTimeMillis() < end) {
+            Thread.sleep(4000)
+            val out = try {
+                sh("cat $log").also { fails = 0 }
+            } catch (e: Exception) {
+                fails++
+                onProgress("Reconectando con la TV… (la TV sigue trabajando)")
+                if (fails > 30) throw e
+                continue
+            }
+            onProgress(out)
+            if (out.contains("TVL_DONE")) return out
+        }
+        error("La tarea tardó demasiado")
+    }
+
     fun close() {
         try { dadb?.close() } catch (_: Exception) { }
         dadb = null

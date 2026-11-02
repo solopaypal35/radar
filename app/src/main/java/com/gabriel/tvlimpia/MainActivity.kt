@@ -51,6 +51,8 @@ import kotlinx.coroutines.launch
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // Pantalla encendida mientras la app está abierta: evita cortes en tareas largas
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val act = this
         setContent {
             MaterialTheme(
@@ -540,7 +542,7 @@ fun friendlyError(e: Exception): String {
     val m = (e.message ?: e.javaClass.simpleName)
     val l = m.lowercase()
     return when {
-        "broken pipe" in l || "reset" in l || "eof" in l || "closed" in l ->
+        "broken pipe" in l || "abort" in l || "reset" in l || "eof" in l || "closed" in l ->
             "La TV cortó la conexión.\n" +
                 "• Mira si en la TV hay un aviso «¿Permitir depuración?» y acéptalo con «Permitir siempre».\n" +
                 "• Si no sale ningún aviso: en Opciones para desarrolladores, apaga y vuelve a encender «Depuración por red» (y «Revocar autorizaciones de depuración USB» si existe), y pulsa Conectar otra vez."
