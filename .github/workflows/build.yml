@@ -1,0 +1,22 @@
+name: Sonda camaras cat
+on: push
+jobs:
+  sonda:
+    runs-on: ubuntu-latest
+    steps:
+      - run: |
+          curl -s -L "http://www.gencat.cat/transit/opendata/cameres.xml" -o cat.xml
+          grep -o 'sctidcam=[^<]*' cat.xml | head -5
+          echo "--- distintos ficheros de imagen y sus tamaños/hash"
+          for id in $(grep -o 'sctidcam=[^<]*' cat.xml | head -8 | cut -d= -f2); do
+            for base in "http://mct.gencat.cat/mct2bo/RenderService?sctidcam=" "https://mct.gencat.cat/mct2bo/RenderService?sctidcam="; do
+              curl -s -L --max-time 20 -o i.bin -w "$base$id HTTP %{http_code} %{content_type} %{size_download} " "$base$id"; md5sum i.bin | cut -c1-10
+            done
+          done
+          echo "--- con referer"
+          id=$(grep -o 'sctidcam=[^<]*' cat.xml | head -1 | cut -d= -f2)
+          curl -s -L -e "https://transit.gencat.cat/" -A "Mozilla/5.0" -o i.bin -w "ref HTTP %{http_code} %{content_type} %{size_download} " "http://mct.gencat.cat/mct2bo/RenderService?sctidcam=$id"; md5sum i.bin | cut -c1-10
+          echo "--- web actual de cámaras del SCT"
+          curl -s -L --max-time 30 "https://transit.gencat.cat/ca/inici/" | grep -io 'cam[^"]*\(jpg\|gif\|png\|RenderService\)[^"]*' | head -10
+          curl -s -L --max-time 30 "http://www.gencat.cat/transit/opendata/cameres.kml" | grep -io 'http[^<"]*' | grep -iv 'opengis\|google\|w3' | sort -u | head -8
+          for u in "https://cameres.gencat.cat" "https://infotransit.gencat.cat/" "https://mct.gencat.cat/mct2bo/"; do curl -s -L --max-time 20 -o /dev/null -w "$u HTTP %{http_code}\n" "$u"; done
