@@ -106,7 +106,7 @@ fun App(act: ComponentActivity) {
             try {
                 block()
             } catch (e: Exception) {
-                status = "Error: " + (e.message ?: e.javaClass.simpleName)
+                status = friendlyError(e)
             } finally {
                 busy = false
             }
@@ -134,7 +134,10 @@ fun App(act: ComponentActivity) {
         "Conectando con $ip…\nSi en la TV aparece «¿Permitir depuración?», marca «Permitir siempre» y pulsa Aceptar."
     ) {
         val info = onAdb {
-            adb.connect(ip)
+            adb.connect(ip) { n ->
+                status = "Esperando a la TV (intento $n de 20)…\n" +
+                    "Mira la TV: si aparece «¿Permitir depuración?», marca «Permitir siempre» y pulsa Aceptar."
+            }
             adb.sh("getprop ro.product.model").trim() + " · Android " +
                 adb.sh("getprop ro.build.version.release").trim()
         }
@@ -496,5 +499,19 @@ fun DisabledRow(a: AppEntry, enabled: Boolean, onEnable: () -> Unit) {
             }
             TextButton(onClick = onEnable, enabled = enabled) { Text("Reactivar") }
         }
+    }
+}
+
+fun friendlyError(e: Exception): String {
+    val m = (e.message ?: e.javaClass.simpleName)
+    val l = m.lowercase()
+    return when {
+        "broken pipe" in l || "reset" in l || "eof" in l || "closed" in l ->
+            "La TV cortó la conexión.\n" +
+                "• Mira si en la TV hay un aviso «¿Permitir depuración?» y acéptalo con «Permitir siempre».\n" +
+                "• Si no sale ningún aviso: en Opciones para desarrolladores, apaga y vuelve a encender «Depuración por red» (y «Revocar autorizaciones de depuración USB» si existe), y pulsa Conectar otra vez."
+        "refused" in l || "timed out" in l || "timeout" in l || "unreachable" in l ->
+            "No llego a la TV. Comprueba que está encendida, en la misma Wi‑Fi y con «Depuración por red» activada."
+        else -> "Error: $m"
     }
 }

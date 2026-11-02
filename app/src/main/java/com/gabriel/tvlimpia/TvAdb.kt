@@ -28,25 +28,61 @@ class TvAdb(private val ctx: Context) {
         return AdbKeyPair.read(priv, pub)
     }
 
-    fun connect(ip: String) {
-        close()
+    private var lastIp: String? = null
+
+    private fun openOnce(ip: String): Dadb {
         val d = Dadb.create(ip, 5555, keyPair())
-        val r = d.shell("echo tvlimpia")
-        if (!r.output.contains("tvlimpia")) {
-            d.close()
-            error("La TV no respondió")
+        try {
+            val r = d.shell("echo tvlimpia")
+            if (!r.output.contains("tvlimpia")) error("La TV no respondió")
+            return d
+        } catch (e: Exception) {
+            try { d.close() } catch (_: Exception) { }
+            throw e
         }
-        dadb = d
     }
 
+    /**
+     * La primera vez la TV muestra «¿Permitir depuración?» y a veces corta la conexión
+     * mientras esperas (Broken pipe). Reintentamos durante ~40 s para darte tiempo a aceptar.
+     */
+    fun connect(ip: String, onRetry: (Int) -> Unit = {}) {
+        close()
+        var last: Exception? = null
+        for (i in 1..20) {
+            try {
+                dadb = openOnce(ip)
+                lastIp = ip
+                return
+            } catch (e: Exception) {
+                last = e
+                onRetry(i)
+                Thread.sleep(2000)
+            }
+        }
+        throw last ?: IllegalStateException("No se pudo conectar")
+    }
+
+    /** Si la conexión se cae (TV en reposo, Wi-Fi), reconecta una vez y repite la orden. */
     fun sh(cmd: String): String {
-        val r = (dadb ?: error("No hay ninguna TV conectada")).shell(cmd)
-        return r.output + r.errorOutput
+        val d = dadb ?: error("No hay ninguna TV conectada")
+        return try {
+            val r = d.shell(cmd)
+            r.output + r.errorOutput
+        } catch (e: Exception) {
+            val ip = lastIp ?: throw e
+            try { d.close() } catch (_: Exception) { }
+            val nd = openOnce(ip)
+            dadb = nd
+            val r = nd.shell(cmd)
+            r.output + r.errorOutput
+        }
     }
 
     fun close() {
         try { dadb?.close() } catch (_: Exception) { }
         dadb = null
+        lastIp = null
     }
 
     companion object {
