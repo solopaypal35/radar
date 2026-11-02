@@ -206,6 +206,14 @@ public class RadarDB {
         }
     }
 
+    static byte[] leerBytes(InputStream in) throws IOException {
+        ByteArrayOutputStream buf = new ByteArrayOutputStream();
+        byte[] b = new byte[16384];
+        int n;
+        while ((n = in.read(b)) > 0) buf.write(b, 0, n);
+        return buf.toByteArray();
+    }
+
     static String leer(InputStream in) throws IOException {
         ByteArrayOutputStream buf = new ByteArrayOutputStream();
         byte[] b = new byte[16384];

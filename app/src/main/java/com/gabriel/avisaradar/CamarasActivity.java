@@ -155,29 +155,66 @@ public class CamarasActivity extends Pantalla {
         cargando.setText("Cargando imagen…");
         new Thread(() -> {
             Bitmap b = null;
+            boolean fuera = false;
             try {
-                HttpURLConnection con = (HttpURLConnection) new URL(url + "?t=" + System.currentTimeMillis()).openConnection();
+                // Para no recibir una imagen vieja de la caché: «&t=» si la dirección ya lleva «?»
+                String u = url + (url.contains("?") ? "&" : "?") + "t=" + System.currentTimeMillis();
+                HttpURLConnection con = (HttpURLConnection) new URL(u).openConnection();
                 con.setInstanceFollowRedirects(true);
                 con.setConnectTimeout(10000);
                 con.setReadTimeout(20000);
                 con.setRequestProperty("User-Agent", "AlLoro (app personal)");
                 try (InputStream in = con.getInputStream()) {
-                    b = BitmapFactory.decodeStream(in);
+                    byte[] datos = RadarDB.leerBytes(in);
+                    b = BitmapFactory.decodeByteArray(datos, 0, datos.length);
+                    fuera = b != null && esCartelFueraDeServicio(url, datos.length, b);
                 } finally {
                     con.disconnect();
                 }
             } catch (Exception ignored) {
             }
             Bitmap fin = b;
+            boolean sinServicio = fuera;
             runOnUiThread(() -> {
-                if (fin != null) {
+                View tarjeta = (View) img.getParent().getParent();
+                if (fin != null && !sinServicio) {
                     img.setImageBitmap(fin);
+                    img.setAlpha(1f);
                     cargando.setVisibility(View.GONE);
+                    tarjeta.setAlpha(1f);
                 } else {
-                    cargando.setText("Imagen no disponible ahora");
+                    img.setImageDrawable(null);
+                    cargando.setVisibility(View.VISIBLE);
+                    cargando.setText(sinServicio ? "Cámara fuera de servicio ahora" : "Imagen no disponible ahora");
+                    // Se atenúa y se manda al final para que arriba queden las que funcionan
+                    tarjeta.setAlpha(0.55f);
+                    if (tarjeta.getParent() == lista && lista.indexOfChild(tarjeta) < lista.getChildCount() - 1) {
+                        android.view.ViewGroup.LayoutParams lp = tarjeta.getLayoutParams();
+                        lista.removeView(tarjeta);
+                        lista.addView(tarjeta, lp);
+                    }
                 }
             });
         }).start();
+    }
+
+    /**
+     * El SCT devuelve un cartel blanco «Servei no disponible» (siempre el mismo, ~14 KB) cuando
+     * una cámara no funciona. Se reconoce por su tamaño o porque la imagen es casi toda blanca.
+     */
+    static boolean esCartelFueraDeServicio(String url, int bytes, Bitmap b) {
+        if (!url.contains("gencat.cat")) return false;
+        if (bytes == 14184) return true;
+        int blancos = 0, total = 0;
+        int pasoX = Math.max(1, b.getWidth() / 24), pasoY = Math.max(1, b.getHeight() / 18);
+        for (int y = 0; y < b.getHeight(); y += pasoY) {
+            for (int x = 0; x < b.getWidth(); x += pasoX) {
+                int c = b.getPixel(x, y);
+                if (((c >> 16) & 0xFF) > 235 && ((c >> 8) & 0xFF) > 235 && (c & 0xFF) > 235) blancos++;
+                total++;
+            }
+        }
+        return total > 0 && blancos > total * 0.75;
     }
 
     private Location posicion() {
