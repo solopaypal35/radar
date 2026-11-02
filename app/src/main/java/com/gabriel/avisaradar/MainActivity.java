@@ -244,11 +244,11 @@ public class MainActivity extends Pantalla {
         nav.setGravity(Gravity.CENTER_VERTICAL);
         nav.setPadding(dp(6), dp(6), dp(6), dp(6));
         nav.setBackground(redondo(0xFF15191A, BORDE, 32));
-        nav.addView(navBoton(R.drawable.ic_inicio, true, v -> scroll.smoothScrollTo(0, 0)));
         nav.addView(navBoton(R.drawable.ic_mapa_b, false, v -> {
             if (Ajustes.usarMapa(this)) startActivity(new Intent(this, MapaActivity.class));
             else toast("El mapa está desactivado en Ajustes");
         }));
+        nav.addView(navBoton(R.drawable.ic_cctv, false, v -> startActivity(new Intent(this, CamarasActivity.class))));
         nav.addView(navBoton(R.drawable.ic_ajustes, false, v -> startActivity(new Intent(this, AjustesActivity.class))));
         barra.addView(nav);
         View sep = new View(this);
@@ -553,7 +553,7 @@ public class MainActivity extends Pantalla {
         android.widget.FrameLayout f = botonIcono(recurso, seleccionado ? TEXTO : SUB, 22,
                 seleccionado ? redondo(0xFF2A3133, 0xFF2A3133, 26) : null);
         pulsable(f, l);
-        f.setLayoutParams(new LinearLayout.LayoutParams(dp(56), dp(52)));
+        f.setLayoutParams(new LinearLayout.LayoutParams(dp(52), dp(52)));
         return f;
     }
 
@@ -636,7 +636,8 @@ public class MainActivity extends Pantalla {
 
     private void alternar() {
         if (RadarService.activo) {
-            stopService(new Intent(this, RadarService.class));
+            // Se pide al servicio que pare: así guarda el aparcamiento y dice el resumen del viaje
+            startService(new Intent(this, RadarService.class).setAction(RadarService.ACCION_PARAR));
             handler.postDelayed(this::refrescar, 300);
             return;
         }

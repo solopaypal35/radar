@@ -136,7 +136,59 @@ public class Ajustes {
         prefs(c).edit().putBoolean("sonido_" + tipo, v).apply();
     }
 
-    // ---------- Gasolineras ----------
+    // ---------- Arranque automático ----------
+
+    /** Dirección del Bluetooth del coche ("" = ninguno). */
+    public static String bluetoothCoche(Context c) {
+        return prefs(c).getString("bt_coche", "");
+    }
+
+    public static String nombreBluetoothCoche(Context c) {
+        return prefs(c).getString("bt_coche_nombre", "");
+    }
+
+    public static void setBluetoothCoche(Context c, String direccion, String nombre) {
+        prefs(c).edit().putString("bt_coche", direccion).putString("bt_coche_nombre", nombre).apply();
+    }
+
+    public static boolean arranqueNavegador(Context c) {
+        return prefs(c).getBoolean("arranque_navegador", false);
+    }
+
+    public static void setArranqueNavegador(Context c, boolean v) {
+        prefs(c).edit().putBoolean("arranque_navegador", v).apply();
+    }
+
+    // ---------- Voz ----------
+
+    public static final float[] VELOCIDADES = {0.85f, 1.0f, 1.2f};
+    public static final float[] VOLUMENES = {0.6f, 0.8f, 1.0f};
+
+    public static int velocidadVoz(Context c) {
+        return prefs(c).getInt("vel_voz", 1);
+    }
+
+    public static void setVelocidadVoz(Context c, int v) {
+        prefs(c).edit().putInt("vel_voz", v).apply();
+    }
+
+    public static int volumenVoz(Context c) {
+        return prefs(c).getInt("vol_voz", 2);
+    }
+
+    public static void setVolumenVoz(Context c, int v) {
+        prefs(c).edit().putInt("vol_voz", v).apply();
+    }
+
+    public static boolean resumenViaje(Context c) {
+        return prefs(c).getBoolean("resumen_viaje", true);
+    }
+
+    public static void setResumenViaje(Context c, boolean v) {
+        prefs(c).edit().putBoolean("resumen_viaje", v).apply();
+    }
+
+        // ---------- Gasolineras ----------
 
     /** Posición en Gasolineras.IDS del combustible que usas (0 = gasolina 95). */
     public static int combustible(Context c) {

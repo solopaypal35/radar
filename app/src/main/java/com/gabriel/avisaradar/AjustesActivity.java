@@ -24,7 +24,10 @@ public class AjustesActivity extends Pantalla {
     private final TextView[] chipsComb = new TextView[Gasolineras.NOMBRES.length];
     private final TextView[] metrosDist = new TextView[4];
     private final TextView[][] chipsDist = new TextView[4][3];
-    private TextView radaresEstado, estadoBateria;
+    private TextView radaresEstado, estadoBateria, estadoBt, estadoNav;
+    private final TextView[] chipsVel = new TextView[3];
+    private final TextView[] chipsVol = new TextView[3];
+    private android.speech.tts.TextToSpeech ttsPrueba;
     private boolean descargando = false;
 
     @Override
@@ -184,6 +187,47 @@ public class AjustesActivity extends Pantalla {
         datos.addView(filaRad);
         col.addView(datos);
 
+        // ---------- Voz ----------
+        col.addView(seccion("Voz"));
+        LinearLayout voz = tarjeta();
+        voz.addView(fila("Velocidad", null, null));
+        voz.addView(filaChips(new String[]{"Lenta", "Normal", "Rápida"}, chipsVel, 84,
+                pos -> Ajustes.setVelocidadVoz(this, pos)));
+        marcarChips(chipsVel, Ajustes.velocidadVoz(this));
+        espacio(voz, 8);
+        voz.addView(separador());
+        voz.addView(fila("Volumen", "Respecto al volumen multimedia del móvil", null));
+        voz.addView(filaChips(new String[]{"Bajo", "Medio", "Alto"}, chipsVol, 84,
+                pos -> Ajustes.setVolumenVoz(this, pos)));
+        marcarChips(chipsVol, Ajustes.volumenVoz(this));
+        espacio(voz, 12);
+        TextView probar = botonPequeno("▶  Probar la voz");
+        probar.setTextColor(VERDE);
+        pulsable(probar, v -> probarVoz());
+        voz.addView(probar, new LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(46)));
+        espacio(voz, 6);
+        voz.addView(separador());
+        Switch resumen = interruptor("Resumen del viaje al llegar", Ajustes.resumenViaje(this));
+        resumen.setOnCheckedChangeListener((b, si) -> Ajustes.setResumenViaje(this, si));
+        voz.addView(resumen);
+        col.addView(voz);
+
+        // ---------- Arranque automático ----------
+        col.addView(seccion("Arranque automático"));
+        LinearLayout arr = tarjeta();
+        estadoBt = texto("", 14, VERDE, true);
+        LinearLayout filaBt = fila("Con el Bluetooth del coche",
+                "Se enciende al conectarlo y se apaga al desconectarlo", estadoBt);
+        pulsable(filaBt, v -> elegirBluetooth());
+        arr.addView(filaBt);
+        arr.addView(separador());
+        estadoNav = texto("", 14, VERDE, true);
+        LinearLayout filaNav = fila("Al abrir Waze o Google Maps",
+                "Necesita un permiso de accesibilidad que solo ve qué app se abre", estadoNav);
+        pulsable(filaNav, v -> configurarArranqueNavegador());
+        arr.addView(filaNav);
+        col.addView(arr);
+
         // ---------- Funcionamiento en segundo plano (batería) ----------
         col.addView(seccion("Funcionamiento en segundo plano"));
         LinearLayout bat = tarjeta();
@@ -211,6 +255,168 @@ public class AjustesActivity extends Pantalla {
     protected void onResume() {
         super.onResume();
         pintarBateria();
+        pintarArranque();
+    }
+
+    @Override
+    protected void onDestroy() {
+        if (ttsPrueba != null) ttsPrueba.shutdown();
+        super.onDestroy();
+    }
+
+    // ---------- Voz ----------
+
+    private void probarVoz() {
+        String frase = "Radar a 500 metros, límite 80";
+        if (ttsPrueba == null) {
+            ttsPrueba = new android.speech.tts.TextToSpeech(this, st -> {
+                if (st == android.speech.tts.TextToSpeech.SUCCESS) {
+                    ttsPrueba.setLanguage(new java.util.Locale("es", "ES"));
+                    hablarPrueba(frase);
+                }
+            });
+        } else {
+            hablarPrueba(frase);
+        }
+    }
+
+    private void hablarPrueba(String frase) {
+        ttsPrueba.setSpeechRate(Ajustes.VELOCIDADES[Ajustes.velocidadVoz(this)]);
+        Bundle b = new Bundle();
+        b.putFloat(android.speech.tts.TextToSpeech.Engine.KEY_PARAM_VOLUME, Ajustes.VOLUMENES[Ajustes.volumenVoz(this)]);
+        ttsPrueba.speak(frase, android.speech.tts.TextToSpeech.QUEUE_FLUSH, b, "prueba");
+    }
+
+    // ---------- Arranque automático ----------
+
+    private void pintarArranque() {
+        String bt = Ajustes.nombreBluetoothCoche(this);
+        estadoBt.setText(Ajustes.bluetoothCoche(this).isEmpty() ? "Elegir ›" : (bt.isEmpty() ? "Elegido" : bt) + " ✓");
+        estadoBt.setTextColor(Ajustes.bluetoothCoche(this).isEmpty() ? SUB : VERDE);
+        boolean nav = Ajustes.arranqueNavegador(this) && accesibilidadActiva();
+        estadoNav.setText(nav ? "Activado ✓" : "Activar ›");
+        estadoNav.setTextColor(nav ? VERDE : SUB);
+    }
+
+    /** Lista los Bluetooth emparejados para elegir el del coche. */
+    private void elegirBluetooth() {
+        if (Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                != PackageManager.PERMISSION_GRANTED) {
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT}, 7);
+            return;
+        }
+        android.bluetooth.BluetoothManager bm = getSystemService(android.bluetooth.BluetoothManager.class);
+        android.bluetooth.BluetoothAdapter ad = bm == null ? null : bm.getAdapter();
+        if (ad == null) {
+            toast("Este móvil no tiene Bluetooth");
+            return;
+        }
+        java.util.List<android.bluetooth.BluetoothDevice> lista = new java.util.ArrayList<>();
+        try {
+            lista.addAll(ad.getBondedDevices());
+        } catch (SecurityException e) {
+            toast("Falta el permiso de Bluetooth");
+            return;
+        }
+        if (lista.isEmpty()) {
+            toast("Primero empareja el móvil con el coche desde los ajustes de Bluetooth");
+            return;
+        }
+        String[] nombres = new String[lista.size() + 1];
+        for (int i = 0; i < lista.size(); i++) {
+            String n = null;
+            try {
+                n = lista.get(i).getName();
+            } catch (SecurityException ignored) {
+            }
+            nombres[i] = n != null ? n : lista.get(i).getAddress();
+        }
+        nombres[lista.size()] = "Ninguno (desactivar)";
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("¿Cuál es el Bluetooth del coche?")
+                .setItems(nombres, (d, w) -> {
+                    if (w == lista.size()) {
+                        Ajustes.setBluetoothCoche(this, "", "");
+                    } else {
+                        Ajustes.setBluetoothCoche(this, lista.get(w).getAddress(), nombres[w]);
+                        pedirUbicacionSiempre();
+                    }
+                    pintarArranque();
+                })
+                .show();
+    }
+
+    /** Para encenderse solo sin abrir la app, Android pide ubicación «Permitir todo el tiempo» y sin límite de batería. */
+    private void pedirUbicacionSiempre() {
+        if (checkSelfPermission(Manifest.permission.ACCESS_BACKGROUND_LOCATION) == PackageManager.PERMISSION_GRANTED) {
+            avisoBateria();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Un permiso más")
+                .setMessage("Para que Al Loro se encienda solo con el coche, Android necesita la ubicación "
+                        + "«Permitir todo el tiempo». Solo se usa mientras los avisos están encendidos.")
+                .setPositiveButton("Dar permiso", (d, w) -> requestPermissions(
+                        new String[]{Manifest.permission.ACCESS_BACKGROUND_LOCATION}, 8))
+                .setNegativeButton("Ahora no", null)
+                .show();
+    }
+
+    private void avisoBateria() {
+        android.os.PowerManager pm = (android.os.PowerManager) getSystemService(POWER_SERVICE);
+        if (!pm.isIgnoringBatteryOptimizations(getPackageName())) {
+            toast("Activa también «Permitir que funcione siempre», al final de Ajustes");
+        }
+    }
+
+    @Override
+    public void onRequestPermissionsResult(int code, String[] permisos, int[] res) {
+        super.onRequestPermissionsResult(code, permisos, res);
+        if (code == 7 && Build.VERSION.SDK_INT >= 31 && checkSelfPermission(Manifest.permission.BLUETOOTH_CONNECT)
+                == PackageManager.PERMISSION_GRANTED) {
+            elegirBluetooth();
+        } else if (code == 8) {
+            avisoBateria();
+        }
+    }
+
+    private boolean accesibilidadActiva() {
+        String activos = Settings.Secure.getString(getContentResolver(), Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES);
+        return activos != null && activos.contains(getPackageName() + "/");
+    }
+
+    private void configurarArranqueNavegador() {
+        if (Ajustes.arranqueNavegador(this) && accesibilidadActiva()) {
+            new android.app.AlertDialog.Builder(this)
+                    .setTitle("Arranque con Waze o Maps")
+                    .setMessage("Está activado. ¿Quieres desactivarlo?")
+                    .setPositiveButton("Desactivar", (d, w) -> {
+                        Ajustes.setArranqueNavegador(this, false);
+                        pintarArranque();
+                    })
+                    .setNegativeButton("Dejarlo", null)
+                    .show();
+            return;
+        }
+        Ajustes.setArranqueNavegador(this, true);
+        if (accesibilidadActiva()) {
+            pintarArranque();
+            pedirUbicacionSiempre();
+            return;
+        }
+        new android.app.AlertDialog.Builder(this)
+                .setTitle("Activar en Accesibilidad")
+                .setMessage("Se abrirán los ajustes de Accesibilidad. Busca «Al Loro: arranque con Waze y Maps» "
+                        + "(puede estar en «Apps descargadas») y actívalo.\n\n"
+                        + "Si aparece en gris, ve a Ajustes → Apps → Al Loro → ⋮ (arriba a la derecha) → "
+                        + "«Permitir ajustes restringidos», y vuelve a intentarlo.\n\n"
+                        + "Solo detecta cuándo se abre Waze o Maps; no lee nada de la pantalla.")
+                .setPositiveButton("Abrir Accesibilidad", (d, w) -> {
+                    startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                    pedirUbicacionSiempre();
+                })
+                .setNegativeButton("Cancelar", (d, w) -> Ajustes.setArranqueNavegador(this, false))
+                .show();
     }
 
     /** «Permitido» en turquesa si ya está, o «Permitir ›» en naranja si falta. */

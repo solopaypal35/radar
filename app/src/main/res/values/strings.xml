@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nombre_arranque">Al Loro: arranque con Waze y Maps</string>
+    <string name="descripcion_arranque">Enciende los avisos de Al Loro cuando abres Waze o Google Maps. Solo detecta que se abre una de esas dos apps; no lee nada de lo que aparece en la pantalla.</string>
+</resources>

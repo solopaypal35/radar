@@ -94,6 +94,13 @@ public class RadarService extends Service implements LocationListener {
 
     private Thread hiloLimite;
 
+    // ---------- Datos del viaje (para el resumen al llegar) ----------
+    private double viajeMetros = 0, viajeMaxima = 0;
+    private long viajeInicio = 0, paradoDesde = 0;
+    private int viajeRadares = 0, viajeExcesos = 0, viajeTramos = 0, viajeTramosBien = 0;
+    private Location viajeAnterior;
+    private boolean terminando = false;
+
     // Semáforos con cámara y peajes: se avisa una vez al acercarte
     private List<PuntosDB.Punto> semaforos, peajes;
     private final Map<PuntosDB.Punto, Boolean> puntosAvisados = new IdentityHashMap<>();
@@ -152,7 +159,7 @@ public class RadarService extends Service implements LocationListener {
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
         if (intent != null && ACCION_PARAR.equals(intent.getAction())) {
-            stopSelf();
+            terminar();
             return START_NOT_STICKY;
         }
         Notification n = notificacionEstado("Esperando señal GPS…");
@@ -196,7 +203,7 @@ public class RadarService extends Service implements LocationListener {
 
     @Override
     public void onDestroy() {
-        guardarAparcamientoAuto();
+        if (!terminando) guardarAparcamientoAuto();
         manejador.removeCallbacks(vigilarBurbuja);
         if (burbuja != null) burbuja.ocultar();
         if (bluetoothRegistrado) {
@@ -374,6 +381,10 @@ public class RadarService extends Service implements LocationListener {
         boolean perdido = dFin > minFin + 1500 || segundos > 2 * 60 * 60;
         if (llegado || perdido) {
             if (llegado && !Ajustes.soloSiMePaso(this)) emitir("Fin del tramo", "tramo");
+            if (llegado) {
+                viajeTramos++;
+                if (tramo.limite <= 0 || mediaTramo <= tramo.limite) viajeTramosBien++;
+            }
             tramoTerminado = tramo;
             finTramoHora = System.currentTimeMillis();
             tramo = null;
@@ -449,6 +460,95 @@ public class RadarService extends Service implements LocationListener {
                 .replace(" metros", " m") + (mejor.precio.isEmpty() ? "" : " · " + mejor.precio.replace(" euros", " €"));
     }
 
+    // ---------- Resumen del viaje ----------
+
+    private void contarViaje(Location loc, double kmh) {
+        if (viajeInicio == 0) viajeInicio = loc.getTime();
+        if (viajeAnterior != null && loc.getAccuracy() < 40) {
+            float d = viajeAnterior.distanceTo(loc);
+            if (d < 500) viajeMetros += d; // descarta saltos raros del GPS
+        }
+        if (loc.getAccuracy() < 40) viajeAnterior = loc;
+        viajeMaxima = Math.max(viajeMaxima, kmh);
+
+        // Llegada: más de 5 minutos parado después de haber recorrido al menos 1 km
+        if (kmh < 3) {
+            if (paradoDesde == 0) paradoDesde = loc.getTime();
+            if (loc.getTime() - paradoDesde > 5 * 60 * 1000L && viajeMetros > 1000) {
+                guardarAparcamientoAuto();
+                decirResumen("Has llegado. ");
+                reiniciarViaje();
+            }
+        } else {
+            paradoDesde = 0;
+        }
+    }
+
+    private void reiniciarViaje() {
+        viajeMetros = 0;
+        viajeMaxima = 0;
+        viajeInicio = 0;
+        paradoDesde = 0;
+        viajeRadares = viajeExcesos = viajeTramos = viajeTramosBien = 0;
+        viajeAnterior = null;
+    }
+
+    /** Texto del resumen, o null si el viaje ha sido demasiado corto. */
+    private String resumen() {
+        if (viajeMetros < 1000) return null;
+        long min = Math.max(1, (System.currentTimeMillis() - viajeInicio) / 60000);
+        StringBuilder b = new StringBuilder();
+        b.append("Viaje de ").append(distanciaHablada(viajeMetros)).append(" en ");
+        b.append(min >= 60 ? (min / 60) + (min / 60 == 1 ? " hora y " : " horas y ") + (min % 60) + " minutos" : min + " minutos");
+        b.append(". ");
+        b.append(viajeRadares == 0 ? "Ningún radar" : viajeRadares == 1 ? "Un radar" : viajeRadares + " radares");
+        if (viajeTramos > 0) b.append(" y ").append(viajeTramos == 1 ? "un tramo" : viajeTramos + " tramos");
+        b.append(". ");
+        if (viajeExcesos == 0 && viajeTramosBien == viajeTramos) {
+            b.append("Siempre dentro del límite. ¡Muy bien!");
+        } else {
+            int veces = viajeExcesos + (viajeTramos - viajeTramosBien);
+            b.append(veces == 1 ? "Una vez" : veces + " veces").append(" por encima del límite.");
+        }
+        return b.toString();
+    }
+
+    /** Dice el resumen por voz y lo deja en una notificación. Devuelve true si había algo que decir. */
+    private boolean decirResumen(String inicio) {
+        String r = resumen();
+        if (r == null || !Ajustes.resumenViaje(this)) return false;
+        notificar("Resumen del viaje", r, 0xFF3FC1CF, ID_AVISO + 5);
+        ultimoResumen = r;
+        if (Ajustes.tipoAviso(this) == Ajustes.AVISO_VOZ) hablar(inicio + r);
+        return true;
+    }
+
+    public static volatile String ultimoResumen = null;
+
+    /** Apagar los avisos: primero el resumen hablado y luego se para el servicio. */
+    private void terminar() {
+        if (terminando) return;
+        terminando = true;
+        guardarAparcamientoAuto();
+        boolean hablando = decirResumen("");
+        if (hablando && ttsListo && Ajustes.tipoAviso(this) == Ajustes.AVISO_VOZ) {
+            if (lm != null) lm.removeUpdates(this); // ya no hace falta el GPS
+            activo = false;
+            // Se espera a que acabe de hablar (como mucho 15 s)
+            manejador.postDelayed(this::stopSelf, 15000);
+            esperarFinVoz();
+        } else {
+            stopSelf();
+        }
+    }
+
+    private void esperarFinVoz() {
+        manejador.postDelayed(() -> {
+            if (frasePendientes <= 0) stopSelf();
+            else esperarFinVoz();
+        }, 500);
+    }
+
     // ---------- Dónde he aparcado ----------
 
     private void guardarAparcamientoAuto() {
@@ -466,6 +566,7 @@ public class RadarService extends Service implements LocationListener {
     public void onLocationChanged(Location loc) {
         ultima = loc;
         double kmh = loc.hasSpeed() ? loc.getSpeed() * 3.6 : 0;
+        contarViaje(loc, kmh);
         boolean hayRumbo = loc.hasBearing() && kmh > 8;
         float rumbo = loc.getBearing();
 
@@ -477,7 +578,7 @@ public class RadarService extends Service implements LocationListener {
             Location.distanceBetween(loc.getLatitude(), loc.getLongitude(), r.lat, r.lon, res);
             double d = res[0];
             if (d > Math.max(1500, umbrales[0] + 500)) {
-                nivel.remove(r); // al alejarse, se podrá volver a avisar
+                if (nivel.remove(r) != null) viajeRadares++; // al alejarse, se podrá volver a avisar
                 continue;
             }
             if (hayRumbo) {
@@ -549,6 +650,7 @@ public class RadarService extends Service implements LocationListener {
     }
 
     private void avisar(RadarDB.Radar r, int metros, int lim, boolean exceso, boolean conSonido) {
+        if (exceso) viajeExcesos++;
         String frase = (r.propio ? "Aviso a " : "Radar a ") + metros + " metros";
         if (lim > 0) frase += ", límite " + lim;
         if (exceso) frase += ". Reduce la velocidad";
@@ -667,7 +769,10 @@ public class RadarService extends Service implements LocationListener {
         if (ttsListo) {
             pedirFoco();
             frasePendientes++;
-            tts.speak(frase, TextToSpeech.QUEUE_ADD, null, "aviso" + System.nanoTime());
+            tts.setSpeechRate(Ajustes.VELOCIDADES[Ajustes.velocidadVoz(this)]);
+            Bundle b = new Bundle();
+            b.putFloat(TextToSpeech.Engine.KEY_PARAM_VOLUME, Ajustes.VOLUMENES[Ajustes.volumenVoz(this)]);
+            tts.speak(frase, TextToSpeech.QUEUE_ADD, b, "aviso" + System.nanoTime());
         }
     }
 
