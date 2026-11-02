@@ -4,12 +4,15 @@ jobs:
   sonda:
     runs-on: ubuntu-latest
     steps:
-      - run: |
+      - shell: bash {0}
+        run: echo inicio
+      - shell: bash {0}
+        run: |
           curl -s -L "http://www.gencat.cat/transit/opendata/cameres.xml" -o cat.xml
           grep -o 'sctidcam=[^<]*' cat.xml | head -5
           echo "--- distintos ficheros de imagen y sus tamaños/hash"
           for id in $(grep -o 'sctidcam=[^<]*' cat.xml | head -8 | cut -d= -f2); do
-            for base in "http://mct.gencat.cat/mct2bo/RenderService?sctidcam=" "https://mct.gencat.cat/mct2bo/RenderService?sctidcam="; do
+            for base in "http://mct.gencat.cat/mct2bo/RenderService?sctidcam=" ; do
               curl -s -L --max-time 20 -o i.bin -w "$base$id HTTP %{http_code} %{content_type} %{size_download} " "$base$id"; md5sum i.bin | cut -c1-10
             done
           done
