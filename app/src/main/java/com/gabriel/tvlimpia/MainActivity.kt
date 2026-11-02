@@ -215,13 +215,32 @@ fun App(act: ComponentActivity) {
         }
     }
 
+    fun boostMine() {
+        val ip = connected ?: return
+        val mine = apps.filter { it.group == Group.MINE && !it.disabled }.map { it.pkg }
+        if (mine.isEmpty()) { status = "No hay apps tuyas instaladas."; return }
+        job("Preparando…") {
+            val ok = onAdb { Optimizer.boostApps(adb, mine) { s -> status = s } }
+            val prev = prefs.getStringSet("boost_$ip", emptySet()) ?: emptySet()
+            prefs.edit().putStringSet("boost_$ip", prev + ok).apply()
+            health = onAdb { Optimizer.health(adb) }
+            status = "Hecho: ${ok.size} de ${mine.size} apps aceleradas. Tu usuario y contraseña siguen intactos.\n" +
+                "Reinicia la TV y abre tu IPTV: los menús y el cambio de canal deberían ir más fluidos." +
+                (if (ok.size < mine.size) "\nAlgunas no se pudieron compilar (pasa con apps muy protegidas); no les afecta." else "")
+        }
+    }
+
     fun undoOptimize() {
         val ip = connected ?: return
         job("Deshaciendo la optimización…") {
             val r = prefs.getStringSet("restr_$ip", emptySet()) ?: emptySet()
             val o = Optimizer.decode(prefs.getString("orig_$ip", null))
-            onAdb { Optimizer.undo(adb, r, o) }
-            prefs.edit().remove("restr_$ip").remove("orig_$ip").apply()
+            val b = prefs.getStringSet("boost_$ip", emptySet()) ?: emptySet()
+            onAdb {
+                Optimizer.undo(adb, r, o)
+                if (b.isNotEmpty()) Optimizer.unboostApps(adb, b)
+            }
+            prefs.edit().remove("restr_$ip").remove("orig_$ip").remove("boost_$ip").apply()
             status = "Optimización deshecha: ajustes como estaban. Las apps desactivadas se recuperan con «Restaurar todo»."
         }
     }
@@ -371,6 +390,21 @@ fun App(act: ComponentActivity) {
                 val mine = apps.filter { it.group == Group.MINE && !it.disabled }
 
                 if (mine.isNotEmpty()) {
+                    item {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                SectionTitle("Acelerar mis apps (IPTV)")
+                                Text(
+                                    "Compila tus apps a código nativo para que abran, se muevan por los menús y cambien de canal con más fluidez. " +
+                                        "No borra datos: tu usuario y contraseña se mantienen. Tarda unos minutos.",
+                                    color = muted, fontSize = 13.sp,
+                                )
+                                Button(onClick = { boostMine() }, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text("Acelerar mis ${mine.size} apps")
+                                }
+                            }
+                        }
+                    }
                     item { SectionTitle("Tus apps instaladas (${mine.size}) · no se tocan") }
                     items(mine, key = { "mine_" + it.pkg }) { a -> InfoRow(a) }
                 }

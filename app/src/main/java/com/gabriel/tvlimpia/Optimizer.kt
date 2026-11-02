@@ -70,6 +70,28 @@ object Optimizer {
         }
     }
 
+    /**
+     * Compila del todo (modo «speed») las apps elegidas: abren y se mueven más fluidas.
+     * No borra datos ni cierra sesión. Devuelve las que se han compilado bien.
+     */
+    fun boostApps(adb: TvAdb, pkgs: List<String>, step: (String) -> Unit): List<String> {
+        val ok = mutableListOf<String>()
+        pkgs.forEachIndexed { i, p ->
+            step("Acelerando app ${i + 1} de ${pkgs.size}…\n$p\nPuede tardar 1-2 minutos por app. No apagues la TV.")
+            if (adb.sh("cmd package compile -m speed -f $p").contains("Success", true)) ok += p
+        }
+        // El inicio de la TV también se mueve mejor compilado
+        step("Acelerando el inicio de la TV…")
+        adb.sh("cmd package compile -m speed -f com.google.android.apps.tv.launcherx")
+        step("Liberando memoria…")
+        adb.sh("am kill-all")
+        return ok
+    }
+
+    fun unboostApps(adb: TvAdb, pkgs: Collection<String>) {
+        (pkgs + "com.google.android.apps.tv.launcherx").forEach { adb.sh("cmd package compile --reset $it") }
+    }
+
     fun encode(m: Map<String, String>) = m.entries.joinToString(";") { "${it.key}=${it.value}" }
     fun decode(s: String?): Map<String, String> = s.orEmpty().split(';').mapNotNull {
         val i = it.indexOf('=')
