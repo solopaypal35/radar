@@ -78,6 +78,7 @@ public class CamarasActivity extends Pantalla {
     }
 
     private void cargar() {
+        pararDirecto();
         estado.setText("Buscando las más cercanas…");
         lista.removeAllViews();
         ProgressBar rueda = new ProgressBar(this);
@@ -144,17 +145,67 @@ public class CamarasActivity extends Pantalla {
         fila.addView(dist);
         t.addView(fila);
 
+        // Etiqueta «● En directo» encima de la imagen cuando se está refrescando sola
+        TextView vivo = texto("●  En directo · cada 15 s", 11, 0xFF061012, true);
+        vivo.setBackground(redondo(VERDE, VERDE, 12));
+        vivo.setPadding(dp(10), dp(5), dp(10), dp(5));
+        vivo.setVisibility(View.GONE);
+        FrameLayout.LayoutParams lpVivo = new FrameLayout.LayoutParams(ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT, Gravity.TOP | Gravity.START);
+        lpVivo.setMargins(dp(10), dp(10), 0, 0);
+        marco.addView(vivo, lpVivo);
+
         // Al tocar la tarjeta se abre a pantalla completa y se refresca sola cada 15 s
-        String tituloCam = titulo;
-        pulsable(t, v -> startActivity(new android.content.Intent(this, CamaraActivity.class)
-                .putExtra("url", c.imagen).putExtra("titulo", tituloCam)));
+        // Al tocar: la imagen de esa tarjeta se refresca sola cada 15 s (tocar otra vez para parar)
+        pulsable(t, v -> alternarDirecto(c.imagen, img, cargando, vivo));
         cargarImagen(c.imagen, img, cargando);
         return t;
     }
 
+    // ---------- «En directo» dentro de la tarjeta ----------
+
+    private Runnable directo;      // refresco de la cámara activa
+    private TextView vivoActivo;   // su etiqueta «En directo»
+
+    private void alternarDirecto(String url, ImageView img, TextView cargando, TextView vivo) {
+        boolean eraEsta = vivo == vivoActivo;
+        pararDirecto();
+        if (eraEsta) return; // segundo toque: se para
+        vivoActivo = vivo;
+        vivo.setVisibility(View.VISIBLE);
+        directo = new Runnable() {
+            @Override
+            public void run() {
+                cargarImagen(url, img, cargando, true);
+                vivo.animate().alpha(0.35f).setDuration(300).withEndAction(() -> vivo.animate().alpha(1f).setDuration(300).start()).start();
+                handler.postDelayed(this, 15000);
+            }
+        };
+        handler.post(directo);
+    }
+
+    private void pararDirecto() {
+        if (directo != null) handler.removeCallbacks(directo);
+        if (vivoActivo != null) vivoActivo.setVisibility(View.GONE);
+        directo = null;
+        vivoActivo = null;
+    }
+
+    @Override
+    protected void onPause() {
+        super.onPause();
+        pararDirecto(); // al salir de la pantalla deja de gastar datos
+    }
+
     private void cargarImagen(String url, ImageView img, TextView cargando) {
-        cargando.setVisibility(View.VISIBLE);
-        cargando.setText("Cargando imagen…");
+        cargarImagen(url, img, cargando, false);
+    }
+
+    private void cargarImagen(String url, ImageView img, TextView cargando, boolean refresco) {
+        if (!refresco) {
+            cargando.setVisibility(View.VISIBLE);
+            cargando.setText("Cargando imagen…");
+        }
         new Thread(() -> {
             Bitmap b = null;
             boolean fuera = false;
@@ -179,9 +230,11 @@ public class CamarasActivity extends Pantalla {
             boolean sinServicio = fuera;
             runOnUiThread(() -> {
                 View tarjeta = (View) img.getParent().getParent();
+                if (refresco && (fin == null || sinServicio)) return; // se mantiene la última foto buena
                 if (fin != null && !sinServicio) {
                     img.setImageBitmap(fin);
-                    img.setAlpha(1f);
+                    img.setAlpha(refresco ? 0.5f : 1f);
+                    if (refresco) img.animate().alpha(1f).setDuration(350).start();
                     cargando.setVisibility(View.GONE);
                     tarjeta.setAlpha(1f);
                 } else {
