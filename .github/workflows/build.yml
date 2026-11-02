@@ -48,8 +48,11 @@ jobs:
             echo "Probando $URL"
             if curl -sf --max-time 120 -A "AvisaRadar-build" --data-urlencode "data=$Q" "$URL" -o app/src/main/assets/tramos.json \
                && grep -q '"relation"' app/src/main/assets/tramos.json; then
-              echo "Tramos incluidos: $(grep -o '"type": "relation"' app/src/main/assets/tramos.json | wc -l)"
-              cp app/src/main/assets/tramos.json datos/tramos.json
+              NUEVOS=$(grep -o '"type": "relation"' app/src/main/assets/tramos.json | wc -l)
+              GUARDADOS=$(grep -o '"type": "relation"' datos/tramos.json 2>/dev/null | wc -l)
+              # Algunos servidores van con datos atrasados: se queda la lista con más tramos
+              if [ "$NUEVOS" -ge "$GUARDADOS" ]; then cp app/src/main/assets/tramos.json datos/tramos.json; else cp datos/tramos.json app/src/main/assets/tramos.json; fi
+              echo "Tramos incluidos: $(grep -o '"type": "relation"' app/src/main/assets/tramos.json | wc -l) (servidor $NUEVOS, copia $GUARDADOS)"
               exit 0
             fi
           done
