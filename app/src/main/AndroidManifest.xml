@@ -89,6 +89,10 @@
             android:name=".CamarasActivity"
             android:exported="false" />
 
+        <activity
+            android:name=".CamaraActivity"
+            android:exported="false" />
+
         <service
             android:name=".RadarService"
             android:exported="false"

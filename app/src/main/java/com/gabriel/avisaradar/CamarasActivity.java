@@ -144,8 +144,10 @@ public class CamarasActivity extends Pantalla {
         fila.addView(dist);
         t.addView(fila);
 
-        // Al tocar la tarjeta se vuelve a descargar la imagen
-        pulsable(t, v -> cargarImagen(c.imagen, img, cargando));
+        // Al tocar la tarjeta se abre a pantalla completa y se refresca sola cada 15 s
+        String tituloCam = titulo;
+        pulsable(t, v -> startActivity(new android.content.Intent(this, CamaraActivity.class)
+                .putExtra("url", c.imagen).putExtra("titulo", tituloCam)));
         cargarImagen(c.imagen, img, cargando);
         return t;
     }
